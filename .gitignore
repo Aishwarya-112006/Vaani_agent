@@ -8,13 +8,13 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
+/build/
 develop-eggs/
-dist/
+/dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Do not ignore **/lib/ — frontend uses src/lib for shadcn utils
 lib64/
 parts/
 sdist/
@@ -216,3 +216,23 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Frontend / Node
+node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.output/
+frontend/.vinxi/
+frontend/.tanstack/
+frontend/.nitro/
+frontend/.wrangler/
+frontend/.dev.vars
+*.tsbuildinfo
+.eslintcache
+coverage/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
