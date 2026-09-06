@@ -26,6 +26,9 @@ coverage
 .env.*
 !.env.example
 
+# Lovable local metadata
+.lovable/
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
