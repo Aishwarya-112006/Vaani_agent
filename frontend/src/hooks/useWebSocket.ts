@@ -7,6 +7,7 @@ export type AgentState = {
   tool_status: "IDLE" | "RUNNING" | "CANCELLED" | "COMPLETE";
   stale_discarded: number;
   last_interrupt_type: string | null;
+  active_request_id: string | null;
   current_task: Record<string, unknown>;
 };
 
@@ -17,11 +18,7 @@ type UseWebSocketReturn = {
 
 /**
  * Connects to the backend WebSocket at /ws/{sessionId} and streams
- * AgentState updates in real time. State changes from the backend
- * reflect in the UI within ~1 second without any manual refresh.
- *
- * The socket is opened once sessionId becomes available and closed
- * automatically when the component unmounts or sessionId changes.
+ * AgentState updates in real time for the DebugPanel.
  */
 export function useWebSocket(sessionId: string | null): UseWebSocketReturn {
   const [state, setState] = useState<AgentState | null>(null);
@@ -29,7 +26,6 @@ export function useWebSocket(sessionId: string | null): UseWebSocketReturn {
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    // Don't connect until we have a real session id
     if (!sessionId || sessionId === "pending") return;
 
     const wsBase = API_BASE.replace(/^http/, "ws");
@@ -38,26 +34,19 @@ export function useWebSocket(sessionId: string | null): UseWebSocketReturn {
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
-    ws.onopen = () => {
-      setConnected(true);
-    };
+    ws.onopen = () => setConnected(true);
 
     ws.onmessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data as string) as AgentState;
         setState(data);
       } catch {
-        // ignore malformed frames
+        /* ignore malformed frames */
       }
     };
 
-    ws.onclose = () => {
-      setConnected(false);
-    };
-
-    ws.onerror = () => {
-      setConnected(false);
-    };
+    ws.onclose = () => setConnected(false);
+    ws.onerror = () => setConnected(false);
 
     return () => {
       ws.close();
