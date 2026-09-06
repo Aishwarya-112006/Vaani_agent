@@ -8,9 +8,10 @@ from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from groq import RateLimitError
 from pydantic import BaseModel, Field
+from pathlib import Path
 
 from .models import SessionResponse, MessageResponse, StatusResponse, EvaluateResponse
 from agent.state import create_session, get_session, ConversationState
@@ -428,6 +429,26 @@ async def get_status(session_id: str):
 @app.post("/evaluate", response_model=EvaluateResponse)
 async def evaluate():
     return EvaluateResponse(status="ok", message="evaluation stub")
+
+
+@app.get("/evaluate/results")
+async def evaluate_results():
+    """Serve evaluation/results.json written by compute_metrics.py."""
+    candidates = [
+        Path(__file__).resolve().parents[2] / "evaluation" / "results.json",
+        Path(__file__).resolve().parents[1] / "evaluation" / "results.json",
+    ]
+    for path in candidates:
+        if path.is_file():
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                raise HTTPException(status_code=500, detail=f"Invalid results.json: {exc}") from exc
+            return JSONResponse(payload)
+    raise HTTPException(
+        status_code=404,
+        detail="results.json not found — run: python evaluation/compute_metrics.py",
+    )
 
 
 class TtsRequest(BaseModel):

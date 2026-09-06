@@ -1,0 +1,279 @@
+[
+  {
+    "id": "T01",
+    "type": "NORMAL",
+    "description": "Single hotel search, no interruption",
+    "expected": "Correct result spoken",
+    "steps": [
+      { "text": "Find hotels in Delhi under ₹5000", "expect_interrupt": null }
+    ],
+    "checks": ["tool_hotels", "complete"]
+  },
+  {
+    "id": "T02",
+    "type": "NORMAL",
+    "description": "Single restaurant search, no interruption",
+    "expected": "Correct result spoken",
+    "steps": [
+      { "text": "Find restaurants in Connaught Place", "expect_interrupt": null }
+    ],
+    "checks": ["tool_restaurants", "complete"]
+  },
+  {
+    "id": "T03",
+    "type": "NORMAL",
+    "description": "LLM tool selection test",
+    "expected": "Correct tool chosen",
+    "steps": [
+      { "text": "I want South Indian food near Saket", "expect_interrupt": null }
+    ],
+    "checks": ["tool_restaurants", "complete"]
+  },
+  {
+    "id": "T04",
+    "type": "REFINE",
+    "description": "budget ₹3000",
+    "expected": "Old task cancelled, new result correct",
+    "steps": [
+      { "text": "Find hotels in Delhi under ₹5000", "expect_interrupt": null },
+      { "text": "actually under ₹3000", "expect_interrupt": "REFINE", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "tool_hotels", "context_city", "budget_refined"]
+  },
+  {
+    "id": "T05",
+    "type": "REFINE",
+    "description": "vegetarian only",
+    "expected": "Old task cancelled, new result correct",
+    "steps": [
+      { "text": "Find hotels in Delhi under ₹5000", "expect_interrupt": null },
+      { "text": "actually vegetarian only", "expect_interrupt": "REFINE", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "veg_only", "context_city"]
+  },
+  {
+    "id": "T06",
+    "type": "REFINE",
+    "description": "near-metro filter",
+    "expected": "Old task cancelled, new result correct",
+    "steps": [
+      { "text": "Find hotels in Delhi under ₹5000", "expect_interrupt": null },
+      { "text": "actually near metro", "expect_interrupt": "REFINE", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "near_metro", "context_city"]
+  },
+  {
+    "id": "T07",
+    "type": "REFINE",
+    "description": "budget + veg mid-search",
+    "expected": "Old task cancelled, new result correct",
+    "steps": [
+      { "text": "Find hotels in Mumbai under ₹6000", "expect_interrupt": null },
+      { "text": "actually under ₹4000 and veg only", "expect_interrupt": "REFINE", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "veg_only", "context_city", "budget_refined"]
+  },
+  {
+    "id": "T08",
+    "type": "REFINE",
+    "description": "price ceiling raised",
+    "expected": "Old task cancelled, new result correct",
+    "steps": [
+      { "text": "Find hotels in Delhi under ₹3000", "expect_interrupt": null },
+      { "text": "actually under ₹8000", "expect_interrupt": "REFINE", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "budget_refined"]
+  },
+  {
+    "id": "T09",
+    "type": "REFINE",
+    "description": "location Mumbai",
+    "expected": "Updated search with new location",
+    "steps": [
+      { "text": "Find hotels in Delhi under ₹5000", "expect_interrupt": null },
+      { "text": "actually in Mumbai", "expect_interrupt": "REFINE", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "city_mumbai"]
+  },
+  {
+    "id": "T10",
+    "type": "REFINE",
+    "description": "location Bangalore",
+    "expected": "Updated search with new location",
+    "steps": [
+      { "text": "Find hotels in Delhi under ₹5000", "expect_interrupt": null },
+      { "text": "actually Bangalore please", "expect_interrupt": "REFINE", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "city_bangalore"]
+  },
+  {
+    "id": "T11",
+    "type": "REFINE",
+    "description": "Connaught Place",
+    "expected": "Updated search with new location",
+    "steps": [
+      { "text": "Find restaurants in Saket", "expect_interrupt": null },
+      { "text": "actually near Connaught Place", "expect_interrupt": "REFINE", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "tool_restaurants", "area_cp"]
+  },
+  {
+    "id": "T12",
+    "type": "CANCEL",
+    "description": "forget it",
+    "expected": "Rime acknowledges, no result spoken",
+    "steps": [
+      { "text": "Find hotels in Delhi under ₹5000", "expect_interrupt": null },
+      { "text": "forget it", "expect_interrupt": "CANCEL", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "cancelled"]
+  },
+  {
+    "id": "T13",
+    "type": "CANCEL",
+    "description": "never mind",
+    "expected": "Rime acknowledges, no result spoken",
+    "steps": [
+      { "text": "Find restaurants in Delhi", "expect_interrupt": null },
+      { "text": "never mind", "expect_interrupt": "CANCEL", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "cancelled"]
+  },
+  {
+    "id": "T14",
+    "type": "CANCEL",
+    "description": "stop searching",
+    "expected": "Rime acknowledges, no result spoken",
+    "steps": [
+      { "text": "Find hotels in Goa under ₹4000", "expect_interrupt": null },
+      { "text": "stop searching", "expect_interrupt": "CANCEL", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "cancelled"]
+  },
+  {
+    "id": "T15",
+    "type": "STATUS",
+    "description": "what are you searching",
+    "expected": "Status spoken, tool continues running",
+    "steps": [
+      { "text": "Find hotels in Delhi under ₹5000", "expect_interrupt": null },
+      { "text": "what are you searching", "expect_interrupt": "STATUS", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "status_keeps_running"]
+  },
+  {
+    "id": "T16",
+    "type": "STATUS",
+    "description": "still looking",
+    "expected": "Status spoken, tool continues running",
+    "steps": [
+      { "text": "Find restaurants in Mumbai", "expect_interrupt": null },
+      { "text": "are you still looking", "expect_interrupt": "STATUS", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "status_keeps_running"]
+  },
+  {
+    "id": "T17",
+    "type": "STATUS",
+    "description": "how long",
+    "expected": "Status spoken, tool continues running",
+    "steps": [
+      { "text": "Find hotels in Pune under ₹3500", "expect_interrupt": null },
+      { "text": "how long will this take", "expect_interrupt": "STATUS", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "status_keeps_running"]
+  },
+  {
+    "id": "T18",
+    "type": "PIVOT",
+    "description": "hotels → restaurants",
+    "expected": "New tool called, old result discarded",
+    "steps": [
+      { "text": "Find hotels in Delhi under ₹5000", "expect_interrupt": null },
+      { "text": "Find restaurants there instead", "expect_interrupt": "PIVOT", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "tool_restaurants"]
+  },
+  {
+    "id": "T19",
+    "type": "PIVOT",
+    "description": "restaurants → hotels",
+    "expected": "New tool called, old result discarded",
+    "steps": [
+      { "text": "Find restaurants in Connaught Place", "expect_interrupt": null },
+      { "text": "Find hotels instead", "expect_interrupt": "PIVOT", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt", "tool_hotels"]
+  },
+  {
+    "id": "T20",
+    "type": "PIVOT",
+    "description": "hotels → cab",
+    "expected": "New tool called, old result discarded",
+    "steps": [
+      { "text": "Find hotels in Delhi under ₹5000", "expect_interrupt": null },
+      { "text": "Actually book a cab instead — find hotels near the airport", "expect_interrupt": "PIVOT", "wait_ms": 80 }
+    ],
+    "checks": ["interrupt"]
+  },
+  {
+    "id": "T21",
+    "type": "STALE",
+    "description": "extra delay then interrupt",
+    "expected": "Stale result blocked from Rime",
+    "steps": [
+      { "text": "Find hotels in Delhi under ₹5000", "expect_interrupt": null },
+      { "text": "actually under ₹3000", "expect_interrupt": "REFINE", "wait_ms": 40 }
+    ],
+    "checks": ["interrupt", "stale_blocked"],
+    "await_settle_ms": 500
+  },
+  {
+    "id": "T22",
+    "type": "STALE",
+    "description": "delayed result",
+    "expected": "Stale result blocked from Rime",
+    "steps": [
+      { "text": "Find restaurants in Delhi", "expect_interrupt": null },
+      { "text": "actually veg only", "expect_interrupt": "REFINE", "wait_ms": 40 }
+    ],
+    "checks": ["interrupt", "stale_blocked"],
+    "await_settle_ms": 500
+  },
+  {
+    "id": "T23",
+    "type": "STALE",
+    "description": "late tool response",
+    "expected": "Stale result blocked from Rime",
+    "steps": [
+      { "text": "Find hotels in Jaipur under ₹4500", "expect_interrupt": null },
+      { "text": "actually near metro", "expect_interrupt": "REFINE", "wait_ms": 40 }
+    ],
+    "checks": ["interrupt", "stale_blocked"],
+    "await_settle_ms": 500
+  },
+  {
+    "id": "T24",
+    "type": "MULTI",
+    "description": "Three rapid corrections",
+    "expected": "Final state reflects all constraints",
+    "steps": [
+      { "text": "Find hotels in Delhi under ₹5000", "expect_interrupt": null },
+      { "text": "actually under ₹3500", "expect_interrupt": "REFINE", "wait_ms": 50 },
+      { "text": "actually vegetarian only", "expect_interrupt": "REFINE", "wait_ms": 50 },
+      { "text": "actually near metro", "expect_interrupt": "REFINE", "wait_ms": 50 }
+    ],
+    "checks": ["interrupt", "veg_only", "near_metro", "budget_refined", "context_city"],
+    "await_settle_ms": 400
+  },
+  {
+    "id": "T25",
+    "type": "EDGE",
+    "description": "Interrupt before tool starts",
+    "expected": "Graceful handling, no crash",
+    "steps": [
+      { "text": "forget it", "expect_interrupt": "CANCEL" }
+    ],
+    "checks": ["no_crash"]
+  }
+]
