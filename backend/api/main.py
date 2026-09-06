@@ -13,6 +13,7 @@ from groq import RateLimitError
 from .models import SessionResponse, MessageResponse, StatusResponse, EvaluateResponse
 from agent.state import create_session, get_session, ConversationState
 from agent.stt import groq_transcribe
+from tools.hotel_search import parse_hotel_params, search_hotels
 
 
 # Structured JSON logger
@@ -82,9 +83,33 @@ def log_event(event: str, session_id: str = None, turn_id: int = None, tool_id: 
     logger.info(event, extra=extra)
 
 
-async def _complete_tool(session_id: str, turn_id: int, request_id: str) -> None:
-    """Simulate an in-flight tool finishing; discard if the turn was fenced."""
-    await asyncio.sleep(3)
+async def _run_search_hotels(
+    session_id: str,
+    turn_id: int,
+    request_id: str,
+    params: dict,
+) -> None:
+    """Run interruptible search_hotels; discard stale results after fencing."""
+    state = get_session(session_id)
+    if not state:
+        return
+
+    try:
+        result = await search_hotels(
+            city=params.get("city", "Delhi"),
+            budget=params.get("budget", 5000),
+            near_metro=bool(params.get("near_metro", False)),
+            veg_only=bool(params.get("veg_only", False)),
+        )
+    except asyncio.CancelledError:
+        log_event(
+            "tool_cancelled",
+            session_id=session_id,
+            turn_id=turn_id,
+            tool_id=request_id,
+        )
+        return
+
     state = get_session(session_id)
     if not state:
         return
@@ -101,6 +126,8 @@ async def _complete_tool(session_id: str, turn_id: int, request_id: str) -> None
         return
 
     state.tool_status = "COMPLETE"
+    state.last_tool_result = result
+    state.history.append({"role": "assistant", "kind": "tool_result", "result": result})
     log_event("tool_complete", session_id=session_id, turn_id=turn_id, tool_id=request_id)
     await manager.broadcast_state(session_id, state)
 
@@ -218,15 +245,22 @@ async def handle_message(
     state.active_request_id = request_id
     state.last_interrupt_type = classified
     state.tool_status = "RUNNING"
+    state.last_tool_result = None
+
+    prev_params = state.current_task.get("params") if isinstance(state.current_task, dict) else None
+    hotel_params = parse_hotel_params(text or "", prev_params if isinstance(prev_params, dict) else None)
+
     state.current_task = {
-        "type": "restaurant" if text and "restaurant" in text.lower() else "hotel",
+        "type": "hotel",
+        "tool": "search_hotels",
         "raw": text or "",
         "tool_call_id": request_id,
+        "params": hotel_params,
     }
     state.history.append({"role": "user", "kind": "text", "text": text or ""})
 
     state.tool_future = asyncio.create_task(
-        _complete_tool(session_id, state.turn_id, request_id)
+        _run_search_hotels(session_id, state.turn_id, request_id, hotel_params)
     )
 
     log_event(

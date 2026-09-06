@@ -9,11 +9,11 @@ INTENT_PROMPT = """You are a voice assistant that helps users find hotels and re
 Based on the user's utterance, select the correct tool and extract parameters.
 
 Available tools:
-- search_hotels(city, budget, near_metro, veg_friendly)
+- search_hotels(city, budget, near_metro, veg_only)
 - search_restaurants(city, cuisine, veg_only, area)
 
 Respond with JSON only:
-{{"tool": "search_hotels", "params": {{"city": "...", "budget": 5000, "near_metro": false, "veg_friendly": false}}}}
+{{"tool": "search_hotels", "params": {{"city": "...", "budget": 5000, "near_metro": false, "veg_only": false}}}}
 or
 {{"tool": "search_restaurants", "params": {{"city": "...", "cuisine": "...", "veg_only": false, "area": "..."}}}}"""
 

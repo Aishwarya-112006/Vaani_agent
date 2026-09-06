@@ -17,6 +17,7 @@ class ConversationState:
     stale_discarded: int = 0
     last_interrupt_type: Optional[str] = None
     active_request_id: Optional[str] = None
+    last_tool_result: Optional[dict] = None
 
     def to_dict(self) -> dict:
         return {
@@ -27,6 +28,7 @@ class ConversationState:
             "stale_discarded": self.stale_discarded,
             "last_interrupt_type": self.last_interrupt_type,
             "active_request_id": self.active_request_id,
+            "last_tool_result": self.last_tool_result,
         }
 
 
