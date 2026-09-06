@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUpRight, Radio, Zap } from "lucide-react";
+import { ArrowUpRight, Radio, Wifi, WifiOff, Zap } from "lucide-react";
 
 import { createSession } from "@/lib/api";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 import { Backdrop } from "./backdrop";
 import { PushToTalk } from "./PushToTalk";
@@ -154,6 +155,11 @@ export function VoiceAgent() {
   const [session, setSession] = useState("pending");
   const [mounted, setMounted] = useState(false);
   const [sendingAudio, setSendingAudio] = useState(false);
+
+  // Real-time backend state via WebSocket
+  const { state: wsState, connected: wsConnected } = useWebSocket(
+    mounted ? session : null
+  );
 
   const currentTurn = useRef(0);
   const timers = useRef<number[]>([]);
@@ -387,19 +393,54 @@ export function VoiceAgent() {
               <p className="text-xs font-semibold tracking-[.2em] text-brand-cyan">JUDGE PANEL</p>
               <h2 className="mt-1 font-semibold">Live debug</h2>
             </div>
-            <span className="size-2 animate-pulse rounded-full bg-brand-lime" />
+            <div className="flex items-center gap-2">
+              {wsConnected ? (
+                <Wifi className="size-3 text-brand-lime" aria-label="WebSocket connected" />
+              ) : (
+                <WifiOff className="size-3 text-muted-foreground" aria-label="WebSocket disconnected" />
+              )}
+              <span className="size-2 animate-pulse rounded-full bg-brand-lime" />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Metric label="turn_id" value={String(turnId)} tone="violet" />
+            <Metric
+              label="turn_id"
+              value={String(wsState?.turn_id ?? turnId)}
+              tone="violet"
+            />
             <Metric
               label="tool_status"
-              value={status}
-              tone={status === "RUNNING" ? "lime" : status === "CANCELLED" ? "rose" : "muted"}
+              value={wsState?.tool_status ?? status}
+              tone={
+                (wsState?.tool_status ?? status) === "RUNNING"
+                  ? "lime"
+                  : (wsState?.tool_status ?? status) === "CANCELLED"
+                    ? "rose"
+                    : "muted"
+              }
             />
-            <Metric label="interrupt_type" value={interrupt || "—"} tone="cyan" />
-            <Metric label="stale_discarded" value={String(stale)} tone="amber" />
+            <Metric
+              label="interrupt_type"
+              value={wsState?.last_interrupt_type ?? interrupt ?? "—"}
+              tone="cyan"
+            />
+            <Metric
+              label="stale_discarded"
+              value={String(wsState?.stale_discarded ?? stale)}
+              tone="amber"
+            />
             <Metric label="tool_call_id" value={requestId} tone="muted" />
-            <Metric label="active_task" value={task ? task.type : "—"} tone="violet" />
+            <Metric
+              label="active_task"
+              value={
+                wsState?.current_task && Object.keys(wsState.current_task).length > 0
+                  ? String(wsState.current_task["type"] ?? task?.type ?? "—")
+                  : task
+                    ? task.type
+                    : "—"
+              }
+              tone="violet"
+            />
           </div>
           <div className="mt-4 rounded-xl border border-border bg-background/50 p-3 font-mono text-[11px] leading-5 text-muted-foreground">
             <div className="mb-2 flex items-center gap-2 text-foreground">
