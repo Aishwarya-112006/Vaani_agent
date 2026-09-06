@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpRight, Radio, Zap } from "lucide-react";
 
-import { createSession, sendTextMessage } from "@/lib/api";
+import { createSession, fetchRimeSpeech, sendTextMessage } from "@/lib/api";
+import { playRimeAudio, unlockAudio } from "@/lib/audio";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
 import { Backdrop } from "./backdrop";
@@ -169,18 +170,29 @@ export function VoiceAgent() {
     [],
   );
 
-  const speak = useCallback((text: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-IN";
-    window.speechSynthesis.speak(utterance);
-  }, []);
+  const speak = useCallback(async (text: string) => {
+    if (typeof window === "undefined" || !text.trim()) return;
+    try {
+      // Context should already be unlocked from the user gesture that triggered this turn
+      await unlockAudio();
+      const bytes = await fetchRimeSpeech(text);
+      await playRimeAudio(bytes);
+    } catch (err) {
+      pushLog("stale", err instanceof Error ? `TTS · ${err.message}` : "TTS failed");
+      // Fallback so the demo still talks if Rime is down
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "en-IN";
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+  }, [pushLog]);
 
   const addAssistant = useCallback(
     (text: string) => {
       setTurns((x) => [...x, { role: "assistant", text, time: now() }]);
-      speak(text);
+      void speak(text);
     },
     [speak],
   );
@@ -283,7 +295,15 @@ export function VoiceAgent() {
   }, []);
 
   return (
-    <main className="relative mx-auto min-h-screen max-w-[1440px] px-4 pb-20 sm:px-8 lg:px-12">
+    <main
+      className="relative mx-auto min-h-screen max-w-[1440px] px-4 pb-20 sm:px-8 lg:px-12"
+      onPointerDownCapture={() => {
+        void unlockAudio();
+      }}
+      onKeyDownCapture={() => {
+        void unlockAudio();
+      }}
+    >
       <Backdrop />
       <SiteHeader tagline="interruptible intelligence" />
 
@@ -405,7 +425,10 @@ export function VoiceAgent() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.nativeEvent.isComposing) submit(input);
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                    void unlockAudio();
+                    submit(input);
+                  }
                 }}
                 placeholder="Type an interruption…"
                 className="min-w-0 flex-1 rounded-xl border border-border bg-background/60 px-4 py-3 text-sm outline-none transition placeholder:text-muted-foreground focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
@@ -414,7 +437,13 @@ export function VoiceAgent() {
                 type="button"
                 whileHover={{ y: -2 }}
                 whileTap={{ scale: 0.96 }}
-                onClick={() => submit(input)}
+                onPointerDown={() => {
+                  void unlockAudio();
+                }}
+                onClick={() => {
+                  void unlockAudio();
+                  submit(input);
+                }}
                 aria-label="Send"
                 className="grid place-items-center rounded-xl bg-accent px-4 text-sm font-semibold text-accent-foreground transition hover:brightness-110"
               >

@@ -61,6 +61,21 @@ export async function sendAudioMessage(sessionId: string, blob: Blob): Promise<M
   return (await response.json()) as MessageResponse;
 }
 
+export async function fetchRimeSpeech(text: string): Promise<ArrayBuffer> {
+  const response = await fetch(`${API_BASE}/tts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || `TTS failed (${response.status})`);
+  }
+
+  return response.arrayBuffer();
+}
+
 function filenameFor(mime: string) {
   if (mime.includes("mp4")) return "clip.m4a";
   if (mime.includes("ogg")) return "clip.ogg";

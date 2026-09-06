@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Mic, WandSparkles } from "lucide-react";
 
 import { sendAudioMessage, type MessageResponse } from "@/lib/api";
+import { unlockAudio } from "@/lib/audio";
 
 const MIME_CANDIDATES = [
   "audio/webm;codecs=opus",
@@ -136,6 +137,7 @@ export function PushToTalk({
       if (event.code !== "Space" || event.repeat) return;
       if (document.activeElement?.tagName === "INPUT") return;
       event.preventDefault();
+      void unlockAudio();
       void startRecording();
     };
     const onKeyUp = (event: KeyboardEvent) => {
@@ -157,6 +159,7 @@ export function PushToTalk({
     if (event.button !== 0) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
+    void unlockAudio(); // unlock Web Audio during the same gesture as recording
     void startRecording();
   };
 

@@ -8,11 +8,14 @@ from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-
+from fastapi.responses import Response
 from groq import RateLimitError
+from pydantic import BaseModel, Field
+
 from .models import SessionResponse, MessageResponse, StatusResponse, EvaluateResponse
 from agent.state import create_session, get_session, ConversationState
 from agent.stt import groq_transcribe
+from agent.rime import rime_speak
 from tools.hotel_search import parse_hotel_params, search_hotels
 
 
@@ -299,6 +302,30 @@ async def get_status(session_id: str):
 @app.post("/evaluate", response_model=EvaluateResponse)
 async def evaluate():
     return EvaluateResponse(status="ok", message="evaluation stub")
+
+
+class TtsRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=2000)
+
+
+@app.post("/tts")
+async def synthesize_speech(body: TtsRequest):
+    """Return Rime TTS audio bytes (audio/mpeg) for Web Audio playback."""
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is required")
+
+    try:
+        audio = await rime_speak(text)
+    except Exception as exc:
+        log_event("tts_failed")
+        raise HTTPException(status_code=502, detail=f"Rime TTS failed: {exc}") from exc
+
+    if not audio:
+        raise HTTPException(status_code=502, detail="Rime returned empty audio")
+
+    log_event("tts_ok")
+    return Response(content=audio, media_type="audio/mpeg")
 
 
 @app.websocket("/ws/{session_id}")
