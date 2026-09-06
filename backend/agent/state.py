@@ -77,3 +77,15 @@ async def handle_interrupt(state: ConversationState, interrupt: dict, run_tool_f
         state.current_task = {"raw": new_task}
         state.tool_status = "IDLE"
         logger.info(f"[{state.session_id}] PIVOT — new task: {new_task}")
+
+async def tool_callback(result: dict, turn_id: int, state: ConversationState, speak_fn=None) -> None:
+    if turn_id != state.turn_id:
+        state.stale_discarded += 1
+        logger.info(f"[{state.session_id}] Stale result BLOCKED — result turn_id={turn_id} != current turn_id={state.turn_id}")
+        return
+
+    state.tool_status = "COMPLETE"
+    logger.info(f"[{state.session_id}] Result accepted — turn_id={turn_id}")
+
+    if speak_fn:
+        await speak_fn(result)
