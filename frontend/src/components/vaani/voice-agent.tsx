@@ -153,6 +153,7 @@ export function VoiceAgent() {
   const [input, setInput] = useState("");
   const [session, setSession] = useState("pending");
   const [mounted, setMounted] = useState(false);
+  const [sendingAudio, setSendingAudio] = useState(false);
 
   const currentTurn = useRef(0);
   const timers = useRef<number[]>([]);
@@ -270,7 +271,6 @@ export function VoiceAgent() {
     };
   }, []);
 
-
   return (
     <main className="relative mx-auto min-h-screen max-w-[1440px] px-4 pb-20 sm:px-8 lg:px-12">
       <Backdrop />
@@ -335,12 +335,13 @@ export function VoiceAgent() {
             </span>
           </div>
 
-          <Transcript turns={turns} isBusy={status === "RUNNING"} />
+          <Transcript turns={turns} isBusy={status === "RUNNING" || sendingAudio} />
 
           <div className="mt-6 flex flex-col items-center border-t border-border pt-6">
             <PushToTalk
               sessionId={session}
               disabled={!mounted || session === "pending"}
+              onBusyChange={setSendingAudio}
               onSent={({ turn_id, bytes }) => {
                 if (typeof turn_id === "number") {
                   currentTurn.current = turn_id;
