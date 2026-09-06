@@ -1,6 +1,9 @@
 import os
 import json
-from .groq_client import client
+import logging
+from .groq_client import groq_chat_with_retry
+
+logger = logging.getLogger(__name__)
 
 INTENT_PROMPT = """You are a voice assistant that helps users find hotels and restaurants in India.
 Based on the user's utterance, select the correct tool and extract parameters.
@@ -15,19 +18,22 @@ or
 {{"tool": "search_restaurants", "params": {{"city": "...", "cuisine": "...", "veg_only": false, "area": "..."}}}}"""
 
 async def classify_intent(user_utterance: str) -> dict:
-    completion = client.chat.completions.create(
-        model=os.environ.get("GROQ_LLM_MODEL", "llama-3.1-8b-instant"),
-        messages=[
-            {
-                "role": "system",
-                "content": INTENT_PROMPT
-            },
-            {
-                "role": "user",
-                "content": user_utterance
-            }
-        ],
-        response_format={"type": "json_object"},
-        temperature=0,
-    )
-    return json.loads(completion.choices[0].message.content)
+    try:
+        completion = groq_chat_with_retry(
+            messages=[
+                {
+                    "role": "system",
+                    "content": INTENT_PROMPT
+                },
+                {
+                    "role": "user",
+                    "content": user_utterance
+                }
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        return json.loads(completion.choices[0].message.content)
+    except Exception as e:
+        logger.error(f"Intent classification failed: {e}")
+        raise
