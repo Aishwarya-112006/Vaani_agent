@@ -1,0 +1,650 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowUpRight, Mic, Radio, Sparkles, WandSparkles, Zap } from "lucide-react";
+
+import { Backdrop } from "./backdrop";
+import { SiteHeader } from "./site-header";
+
+type Interrupt = "REFINE" | "CANCEL" | "STATUS" | "PIVOT";
+type ToolStatus = "IDLE" | "RUNNING" | "CANCELLED" | "COMPLETE";
+type Task = { type: "hotel" | "restaurant"; params: string; tool_call_id: string };
+type Turn = { role: "user" | "assistant"; text: string; time: string };
+type Log = { kind: "turn" | "tool" | "interrupt" | "stale"; text: string };
+
+const chips = [
+  "Find hotels in Delhi under ₹5000",
+  "Actually, only vegetarian and near a metro",
+  "What are you searching for?",
+  "Forget it",
+  "Find restaurants in Connaught Place instead",
+];
+
+const accentStyles = {
+  violet: {
+    chip: "border-primary/25 bg-primary/10 text-brand-violet",
+    hover: "hover:border-brand-violet/40",
+  },
+  rose: {
+    chip: "border-destructive/25 bg-destructive/10 text-brand-rose",
+    hover: "hover:border-brand-rose/40",
+  },
+  cyan: {
+    chip: "border-accent/25 bg-accent/10 text-brand-cyan",
+    hover: "hover:border-brand-cyan/40",
+  },
+  amber: {
+    chip: "border-brand-amber/25 bg-brand-amber/10 text-brand-amber",
+    hover: "hover:border-brand-amber/40",
+  },
+} as const;
+
+type Accent = keyof typeof accentStyles;
+
+const interruptCards: {
+  type: Interrupt;
+  accent: Accent;
+  utterance: string;
+  description: string;
+}[] = [
+  {
+    type: "REFINE",
+    accent: "violet",
+    utterance: "Actually, make it vegetarian and near a metro.",
+    description: "Merge new constraints into the active task without losing context.",
+  },
+  {
+    type: "CANCEL",
+    accent: "rose",
+    utterance: "Forget it — stop searching.",
+    description: "Fence the in-flight tool call and clear the task cleanly.",
+  },
+  {
+    type: "STATUS",
+    accent: "cyan",
+    utterance: "What are you searching for?",
+    description: "Answer immediately while the original search keeps running.",
+  },
+  {
+    type: "PIVOT",
+    accent: "amber",
+    utterance: "Find restaurants there instead.",
+    description: "Switch domains and invalidate the previous result.",
+  },
+];
+
+function now() {
+  return new Date().toLocaleTimeString([], { hour12: false });
+}
+
+function classify(text: string, task: Task | null): Interrupt | null {
+  const s = text.toLowerCase();
+  if (/what are you|are you still|how long|status/.test(s)) return "STATUS";
+  if (/forget it|never mind|stop searching|cancel|stop it/.test(s)) return "CANCEL";
+  if (
+    task &&
+    ((task.type === "hotel" && /restaurant|food|eat|dinner|cafe/.test(s)) ||
+      (task.type === "restaurant" && /hotel/.test(s)))
+  )
+    return "PIVOT";
+  if (task && /actually|only|vegetarian|veg|under|metro|near|rupees|₹/.test(s)) return "REFINE";
+  return null;
+}
+
+function parseTask(text: string, previous?: Task | null): Task {
+  const s = text.toLowerCase();
+  const type: Task["type"] = /restaurant|food|eat|dinner|cafe/.test(s) ? "restaurant" : "hotel";
+  const city = ["Delhi", "Mumbai", "Bangalore", "Hyderabad", "Chennai", "Pune", "Kolkata", "Goa", "Jaipur"].find(
+    (x) => s.includes(x.toLowerCase()),
+  );
+  const area = ["Connaught Place", "Indiranagar", "Bandra", "Andheri", "Koramangala", "Saket", "Karol Bagh"].find(
+    (x) => s.includes(x.toLowerCase()),
+  );
+  const budget = text.match(/(?:under|₹)\s?(\d{3,5})/i)?.[1];
+  const values = [
+    city ? `city=${city}` : "",
+    area ? `area=${area}` : "",
+    budget ? `budget=${budget}` : "",
+    /vegetarian|veg/.test(s) ? "veg_only=true" : "",
+    /metro/.test(s) ? "near_metro=true" : "",
+  ].filter(Boolean);
+
+  const merged = previous?.params.split(" · ").filter(Boolean) ?? [];
+  values.forEach((value) => {
+    const key = value.split("=")[0];
+    const index = merged.findIndex((x) => x.startsWith(`${key}=`));
+    if (index >= 0) merged[index] = value;
+    else merged.push(value);
+  });
+
+  return {
+    type,
+    params: merged.join(" · ") || (type === "hotel" ? "city=Delhi" : "area=Connaught Place"),
+    tool_call_id: Math.random().toString(16).slice(2, 10),
+  };
+}
+
+export function VoiceAgent() {
+  const [turnId, setTurnId] = useState(0);
+  const [requestId, setRequestId] = useState("—");
+  const [stale, setStale] = useState(0);
+  const [status, setStatus] = useState<ToolStatus>("IDLE");
+  const [interrupt, setInterrupt] = useState<Interrupt | null>(null);
+  const [task, setTask] = useState<Task | null>(null);
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [logs, setLogs] = useState<Log[]>([]);
+  const [input, setInput] = useState("");
+  const [recording, setRecording] = useState(false);
+  const [session, setSession] = useState("pending");
+  const [mounted, setMounted] = useState(false);
+
+  const currentTurn = useRef(0);
+  const recognition = useRef<any>(null);
+  const timers = useRef<number[]>([]);
+  const streamRef = useRef<HTMLDivElement>(null);
+
+  const pushLog = useCallback(
+    (kind: Log["kind"], text: string) =>
+      setLogs((x) => [{ kind, text: `${now()}  ${text}` }, ...x].slice(0, 28)),
+    [],
+  );
+
+  const speak = useCallback((text: string) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-IN";
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
+  const addAssistant = useCallback(
+    (text: string) => {
+      setTurns((x) => [...x, { role: "assistant", text, time: now() }]);
+      speak(text);
+    },
+    [speak],
+  );
+
+  const runTool = useCallback(
+    (next: Task, nextTurn: number) => {
+      setTask(next);
+      setStatus("RUNNING");
+      setRequestId(next.tool_call_id);
+      pushLog("tool", `RUNNING ${next.type} · ${next.params}`);
+
+      const id = window.setTimeout(() => {
+        if (nextTurn !== currentTurn.current) {
+          setStale((x) => x + 1);
+          setStatus((s) => (s === "RUNNING" ? "IDLE" : s));
+          pushLog("stale", `STALE BLOCKED — turn ${nextTurn} ≠ current ${currentTurn.current}`);
+          return;
+        }
+        setStatus("COMPLETE");
+        pushLog("tool", `COMPLETE ${next.type} · fresh result reached Rime`);
+        const p = next.params;
+        const city = p.match(/city=([^ ·]+)/)?.[1] || "Delhi";
+        const budget = p.match(/budget=(\d+)/)?.[1] || "5000";
+        const result =
+          next.type === "hotel"
+            ? `I found 3 hotels in ${city} under ₹${budget}. Top pick: The Lotus Residency, breakfast included.`
+            : `I found 3 restaurants in ${p.match(/area=([^ ·]+)/)?.[1] || city}. Top pick: Saffron Thali, highly rated and open now.`;
+        addAssistant(result);
+      }, 4000);
+
+      timers.current.push(id);
+    },
+    [addAssistant, pushLog],
+  );
+
+  const submit = useCallback(
+    (raw: string) => {
+      const text = raw.trim();
+      if (!text) return;
+      setInput("");
+      setTurns((x) => [...x, { role: "user", text, time: now() }]);
+      pushLog("turn", `USER · ${text}`);
+
+      const type = classify(text, task);
+
+      if (status === "RUNNING" && type === "STATUS") {
+        setInterrupt("STATUS");
+        pushLog("interrupt", "STATUS · tool continues running");
+        addAssistant(
+          `Still searching for ${task?.type ?? "results"}. I will speak the result as soon as it is ready.`,
+        );
+        return;
+      }
+
+      if (type === "CANCEL") {
+        currentTurn.current += 1;
+        setTurnId(currentTurn.current);
+        setInterrupt("CANCEL");
+        setStatus("CANCELLED");
+        setTask(null);
+        pushLog("interrupt", "CANCEL · in-flight search fenced");
+        addAssistant("Okay, I have stopped the search. What would you like instead?");
+        return;
+      }
+
+      const next = parseTask(text, status === "RUNNING" ? task : null);
+      currentTurn.current += 1;
+      const n = currentTurn.current;
+      setTurnId(n);
+      setInterrupt(type || (status === "RUNNING" ? "REFINE" : null));
+      if (status === "RUNNING") pushLog("interrupt", `${type || "REFINE"} · old task fenced`);
+      runTool(next, n);
+    },
+    [addAssistant, pushLog, runTool, status, task],
+  );
+
+  const beginRecording = useCallback(() => {
+    setRecording(true);
+    try {
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) return;
+      recognition.current = new SpeechRecognition();
+      recognition.current.lang = "en-IN";
+      recognition.current.onresult = (e: any) => setInput(e.results[0][0].transcript);
+      recognition.current.start();
+    } catch {
+      /* speech recognition unavailable */
+    }
+  }, []);
+
+  const endRecording = useCallback(() => {
+    setRecording(false);
+    try {
+      recognition.current?.stop();
+    } catch {
+      /* already stopped */
+    }
+  }, []);
+
+  useEffect(() => {
+    setMounted(true);
+    setSession(Math.random().toString(16).slice(2, 10));
+  }, []);
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code === "Space" && document.activeElement?.tagName !== "INPUT") {
+        e.preventDefault();
+        beginRecording();
+      }
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code === "Space") endRecording();
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    const pending = timers.current;
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      pending.forEach((id) => window.clearTimeout(id));
+    };
+  }, [beginRecording, endRecording]);
+
+  useEffect(() => {
+    streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight, behavior: "smooth" });
+  }, [turns]);
+
+  return (
+    <main className="relative mx-auto min-h-screen max-w-[1440px] px-4 pb-20 sm:px-8 lg:px-12">
+      <Backdrop />
+      <SiteHeader tagline="interruptible intelligence" />
+
+      <section className="relative z-10 mx-auto max-w-5xl py-16 text-center sm:py-24">
+        <motion.p
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="mb-5 text-xs font-semibold tracking-[.28em] text-brand-cyan"
+        >
+          DATAFORGE 2026 · INDIA-FIRST VOICE AI
+        </motion.p>
+        <motion.h1
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1, duration: 0.6, ease: "easeOut" }}
+          className="text-balance text-5xl font-semibold tracking-[-.065em] sm:text-7xl lg:text-8xl"
+        >
+          A voice agent that stays <span className="gradient-text">correct</span> when you change
+          your mind.
+        </motion.h1>
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.25, duration: 0.6 }}
+          className="mx-auto mt-7 max-w-2xl text-pretty text-base leading-7 text-muted-foreground sm:text-lg"
+        >
+          The first voice booking agent designed for the sentence that usually breaks automation:
+          “Actually, wait…”
+        </motion.p>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4, duration: 0.5 }}
+          className="mt-8 flex flex-wrap justify-center gap-2 text-xs"
+        >
+          {interruptCards.map((card) => (
+            <span
+              key={card.type}
+              className={`rounded-full border px-3 py-1.5 ${accentStyles[card.accent].chip}`}
+            >
+              {card.type}
+            </span>
+          ))}
+        </motion.div>
+      </section>
+
+      <section className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="glass-card p-5 sm:p-7">
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Radio className="size-4 text-brand-cyan" />
+                Live conversation
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">Hold to talk · release to send</p>
+            </div>
+            <span className="font-mono text-xs text-muted-foreground">
+              session_{mounted ? session : "pending"}
+            </span>
+          </div>
+
+          <div
+            ref={streamRef}
+            className="flex max-h-[420px] min-h-[300px] flex-col gap-3 overflow-y-auto pr-1"
+          >
+            {turns.length === 0 && (
+              <div className="m-auto text-center">
+                <Sparkles className="mx-auto mb-3 size-7 animate-pulse text-brand-violet" />
+                <p className="text-sm text-foreground">Start a live interruption test</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Try the scenarios below or speak your own.
+                </p>
+              </div>
+            )}
+            <AnimatePresence initial={false}>
+              {turns.map((turn, i) => (
+                <motion.div
+                  key={`${turn.time}-${i}`}
+                  layout
+                  initial={{ opacity: 0, y: 14, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.97 }}
+                  transition={{ type: "spring", stiffness: 320, damping: 28 }}
+                  className={`max-w-[88%] rounded-2xl border p-4 ${
+                    turn.role === "user"
+                      ? "ml-auto border-primary/30 bg-primary/10"
+                      : "border-border bg-card/70"
+                  }`}
+                >
+                  <div className="mb-1 flex justify-between gap-5 text-xs text-muted-foreground">
+                    <span>{turn.role === "user" ? "You" : "Vaani"}</span>
+                    <span className="font-mono">{turn.time}</span>
+                  </div>
+                  <p className="text-sm leading-6">{turn.text}</p>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+
+          <div className="mt-6 flex flex-col items-center border-t border-border pt-6">
+            <div className="relative grid place-items-center">
+              {recording && (
+                <span className="pulse-ring absolute size-28 rounded-full bg-destructive/30" />
+              )}
+              <motion.button
+                type="button"
+                aria-label="Hold to talk"
+                aria-pressed={recording}
+                onPointerDown={beginRecording}
+                onPointerUp={endRecording}
+                onPointerLeave={endRecording}
+                animate={{ scale: recording ? [1, 1.06, 1] : [1, 1.03, 1] }}
+                transition={{ repeat: Infinity, duration: recording ? 0.7 : 2.4, ease: "easeInOut" }}
+                whileTap={{ scale: 0.94 }}
+                className={`relative grid size-28 place-items-center rounded-full border-8 text-sm font-semibold text-primary-foreground ${
+                  recording
+                    ? "border-destructive/30 bg-destructive shadow-[0_0_70px_oklch(0.65_0.22_12/0.55)]"
+                    : "border-primary/20 bg-gradient-to-br from-primary to-accent shadow-[0_0_70px_oklch(0.53_0.24_294/0.45)]"
+                }`}
+              >
+                {recording ? <Mic className="size-6" /> : <WandSparkles className="size-6" />}
+              </motion.button>
+            </div>
+            <p className="mt-4 text-xs text-muted-foreground">
+              {recording ? "Listening… release to send" : "Hold the button or press spacebar"}
+            </p>
+
+            <div className="mt-5 flex w-full gap-2">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing) submit(input);
+                }}
+                placeholder="Type an interruption…"
+                className="min-w-0 flex-1 rounded-xl border border-border bg-background/60 px-4 py-3 text-sm outline-none transition placeholder:text-muted-foreground focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
+              />
+              <motion.button
+                type="button"
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={() => submit(input)}
+                aria-label="Send"
+                className="grid place-items-center rounded-xl bg-accent px-4 text-sm font-semibold text-accent-foreground transition hover:brightness-110"
+              >
+                <ArrowUpRight className="size-4" />
+              </motion.button>
+            </div>
+          </div>
+        </div>
+
+        <aside className="glass-card h-fit p-5">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold tracking-[.2em] text-brand-cyan">JUDGE PANEL</p>
+              <h2 className="mt-1 font-semibold">Live debug</h2>
+            </div>
+            <span className="size-2 animate-pulse rounded-full bg-brand-lime" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Metric label="turn_id" value={String(turnId)} tone="violet" />
+            <Metric
+              label="tool_status"
+              value={status}
+              tone={status === "RUNNING" ? "lime" : status === "CANCELLED" ? "rose" : "muted"}
+            />
+            <Metric label="interrupt_type" value={interrupt || "—"} tone="cyan" />
+            <Metric label="stale_discarded" value={String(stale)} tone="amber" />
+            <Metric label="tool_call_id" value={requestId} tone="muted" />
+            <Metric label="active_task" value={task ? task.type : "—"} tone="violet" />
+          </div>
+          <div className="mt-4 rounded-xl border border-border bg-background/50 p-3 font-mono text-[11px] leading-5 text-muted-foreground">
+            <div className="mb-2 flex items-center gap-2 text-foreground">
+              <Zap className="size-3 text-brand-amber" /> event stream
+            </div>
+            <AnimatePresence initial={false}>
+              {logs.length ? (
+                logs.slice(0, 7).map((log) => (
+                  <motion.div
+                    key={log.text}
+                    layout
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0 }}
+                    className={log.kind === "stale" ? "text-brand-rose" : ""}
+                  >
+                    {log.text}
+                  </motion.div>
+                ))
+              ) : (
+                <span>Awaiting first turn…</span>
+              )}
+            </AnimatePresence>
+          </div>
+        </aside>
+      </section>
+
+      <section className="relative z-10 py-20">
+        <SectionTitle
+          eyebrow="INTERRUPTION INTELLIGENCE"
+          title="Every “wait” has a different meaning."
+        />
+        <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {interruptCards.map((card, i) => (
+            <InterruptCard
+              key={card.type}
+              card={card}
+              index={i}
+              onTry={() => setInput(card.utterance)}
+            />
+          ))}
+        </div>
+      </section>
+
+      <Stats />
+
+      <section className="relative z-10 py-20">
+        <SectionTitle eyebrow="SCENARIO PLAYGROUND" title="Skip the happy path." />
+        <div className="mt-8 flex flex-wrap gap-2">
+          {chips.map((chip, i) => (
+            <motion.button
+              key={chip}
+              type="button"
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.4 }}
+              transition={{ delay: i * 0.06, duration: 0.4 }}
+              whileHover={{ y: -3 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setInput(chip)}
+              className="rounded-full border border-border bg-card/60 px-4 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:border-brand-violet/40 hover:text-foreground"
+            >
+              {i === 0 ? "Try the demo · " : ""}
+              {chip}
+            </motion.button>
+          ))}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function Metric({ label, value, tone }: { label: string; value: string; tone: string }) {
+  const toneClass =
+    tone === "violet"
+      ? "text-brand-violet"
+      : tone === "lime"
+        ? "text-brand-lime"
+        : tone === "amber"
+          ? "text-brand-amber"
+          : tone === "cyan"
+            ? "text-brand-cyan"
+            : tone === "rose"
+              ? "text-brand-rose"
+              : "text-muted-foreground";
+
+  return (
+    <div className="rounded-xl border border-border bg-card/60 p-3">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.p
+          key={value}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.2 }}
+          className={`mt-2 truncate font-mono text-sm font-semibold ${toneClass}`}
+        >
+          {value}
+        </motion.p>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+export function SectionTitle({ eyebrow, title }: { eyebrow: string; title: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.5 }}
+      transition={{ duration: 0.5 }}
+    >
+      <p className="text-xs font-semibold tracking-[.24em] text-brand-cyan">{eyebrow}</p>
+      <h2 className="mt-3 text-3xl font-semibold tracking-[-.04em] sm:text-5xl">{title}</h2>
+    </motion.div>
+  );
+}
+
+function InterruptCard({
+  card,
+  index,
+  onTry,
+}: {
+  card: (typeof interruptCards)[number];
+  index: number;
+  onTry: () => void;
+}) {
+  return (
+    <motion.button
+      type="button"
+      initial={{ opacity: 0, y: 25 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.3 }}
+      transition={{ delay: index * 0.08, duration: 0.45, ease: "easeOut" }}
+      whileHover={{ y: -8 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={onTry}
+      className={`group flex h-full flex-col rounded-2xl border border-border bg-card/50 p-5 text-left transition-colors hover:bg-card ${accentStyles[card.accent].hover}`}
+    >
+      <div className="flex items-center justify-between">
+        <span
+          className={`rounded-full border px-2 py-1 text-[10px] font-bold tracking-[.2em] ${accentStyles[card.accent].chip}`}
+        >
+          {card.type}
+        </span>
+        <ArrowUpRight className="size-4 text-muted-foreground transition-transform group-hover:-translate-y-1 group-hover:translate-x-1 group-hover:text-foreground" />
+      </div>
+      <p className="mt-8 min-h-14 flex-1 text-sm leading-6 text-foreground/90">
+        {card.description}
+      </p>
+      <div className="mt-5 border-t border-border pt-4 text-xs italic text-muted-foreground transition-colors group-hover:text-foreground">
+        “{card.utterance}”
+      </div>
+    </motion.button>
+  );
+}
+
+function Stats() {
+  const items = [
+    ["100%", "stale block rate"],
+    ["$0", "cost to recover"],
+    ["<2000ms", "recovery target"],
+    ["4", "interrupt types"],
+  ];
+
+  return (
+    <section className="relative z-10 grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-4">
+      {items.map(([value, label], i) => (
+        <motion.div
+          key={label}
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.4 }}
+          transition={{ delay: i * 0.1, duration: 0.45 }}
+          className="bg-card p-6"
+        >
+          <div className="font-mono text-3xl font-semibold text-foreground">{value}</div>
+          <div className="mt-2 text-xs uppercase tracking-[.18em] text-muted-foreground">
+            {label}
+          </div>
+        </motion.div>
+      ))}
+    </section>
+  );
+}
