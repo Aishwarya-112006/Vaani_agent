@@ -18,10 +18,7 @@ export async function createSession(): Promise<SessionResponse> {
   return (await response.json()) as SessionResponse;
 }
 
-export async function sendAudioMessage(
-  sessionId: string,
-  blob: Blob,
-): Promise<MessageResponse> {
+export async function sendAudioMessage(sessionId: string, blob: Blob): Promise<MessageResponse> {
   const form = new FormData();
   form.append("session_id", sessionId);
   form.append("audio", blob, filenameFor(blob.type));
