@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUpRight, Mic, Radio, Sparkles, WandSparkles, Zap } from "lucide-react";
+import { ArrowUpRight, Radio, Sparkles, Zap } from "lucide-react";
+
+import { createSession } from "@/lib/api";
 
 import { Backdrop } from "./backdrop";
+import { PushToTalk } from "./PushToTalk";
 import { SiteHeader } from "./site-header";
 
 type Interrupt = "REFINE" | "CANCEL" | "STATUS" | "PIVOT";
@@ -147,12 +150,10 @@ export function VoiceAgent() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
   const [input, setInput] = useState("");
-  const [recording, setRecording] = useState(false);
   const [session, setSession] = useState("pending");
   const [mounted, setMounted] = useState(false);
 
   const currentTurn = useRef(0);
-  const recognition = useRef<any>(null);
   const timers = useRef<number[]>([]);
   const streamRef = useRef<HTMLDivElement>(null);
 
@@ -250,54 +251,24 @@ export function VoiceAgent() {
     [addAssistant, pushLog, runTool, status, task],
   );
 
-  const beginRecording = useCallback(() => {
-    setRecording(true);
-    try {
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (!SpeechRecognition) return;
-      recognition.current = new SpeechRecognition();
-      recognition.current.lang = "en-IN";
-      recognition.current.onresult = (e: any) => setInput(e.results[0][0].transcript);
-      recognition.current.start();
-    } catch {
-      /* speech recognition unavailable */
-    }
-  }, []);
-
-  const endRecording = useCallback(() => {
-    setRecording(false);
-    try {
-      recognition.current?.stop();
-    } catch {
-      /* already stopped */
-    }
-  }, []);
-
   useEffect(() => {
     setMounted(true);
-    setSession(Math.random().toString(16).slice(2, 10));
-  }, []);
+    let cancelled = false;
 
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.code === "Space" && document.activeElement?.tagName !== "INPUT") {
-        e.preventDefault();
-        beginRecording();
-      }
-    };
-    const up = (e: KeyboardEvent) => {
-      if (e.code === "Space") endRecording();
-    };
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
+    createSession()
+      .then((created) => {
+        if (!cancelled) setSession(created.session_id);
+      })
+      .catch(() => {
+        if (!cancelled) setSession(crypto.randomUUID());
+      });
+
     const pending = timers.current;
     return () => {
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
+      cancelled = true;
       pending.forEach((id) => window.clearTimeout(id));
     };
-  }, [beginRecording, endRecording]);
+  }, []);
 
   useEffect(() => {
     streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight, behavior: "smooth" });
@@ -406,36 +377,23 @@ export function VoiceAgent() {
           </div>
 
           <div className="mt-6 flex flex-col items-center border-t border-border pt-6">
-            <div className="relative grid place-items-center">
-              {recording && (
-                <span className="pulse-ring absolute size-28 rounded-full bg-destructive/30" />
-              )}
-              <motion.button
-                type="button"
-                aria-label="Hold to talk"
-                aria-pressed={recording}
-                onPointerDown={beginRecording}
-                onPointerUp={endRecording}
-                onPointerLeave={endRecording}
-                animate={{ scale: recording ? [1, 1.06, 1] : [1, 1.03, 1] }}
-                transition={{
-                  repeat: Infinity,
-                  duration: recording ? 0.7 : 2.4,
-                  ease: "easeInOut",
-                }}
-                whileTap={{ scale: 0.94 }}
-                className={`relative grid size-28 place-items-center rounded-full border-8 text-sm font-semibold text-primary-foreground ${
-                  recording
-                    ? "border-destructive/30 bg-destructive shadow-[0_0_70px_oklch(0.65_0.22_12/0.55)]"
-                    : "border-primary/20 bg-gradient-to-br from-primary to-accent shadow-[0_0_70px_oklch(0.53_0.24_294/0.45)]"
-                }`}
-              >
-                {recording ? <Mic className="size-6" /> : <WandSparkles className="size-6" />}
-              </motion.button>
-            </div>
-            <p className="mt-4 text-xs text-muted-foreground">
-              {recording ? "Listening… release to send" : "Hold the button or press spacebar"}
-            </p>
+            <PushToTalk
+              sessionId={session}
+              disabled={!mounted || session === "pending"}
+              onSent={({ turn_id, bytes }) => {
+                if (typeof turn_id === "number") {
+                  currentTurn.current = turn_id;
+                  setTurnId(turn_id);
+                }
+                const kb = (bytes / 1024).toFixed(1);
+                setTurns((x) => [
+                  ...x,
+                  { role: "user", text: `Voice clip sent (${kb} KB)`, time: now() },
+                ]);
+                pushLog("turn", `USER · voice clip ${bytes} bytes → /message`);
+              }}
+              onError={(message) => pushLog("stale", message)}
+            />
 
             <div className="mt-5 flex w-full gap-2">
               <input
