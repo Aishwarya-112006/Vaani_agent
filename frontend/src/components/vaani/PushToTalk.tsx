@@ -111,9 +111,7 @@ export function PushToTalk({
       setIsRecording(true);
     } catch (error) {
       cleanupStream();
-      onError?.(
-        error instanceof Error ? error.message : "Could not start the microphone.",
-      );
+      onError?.(error instanceof Error ? error.message : "Could not start the microphone.");
     }
   }, [busy, cleanupStream, disabled, flushAndSend, onError, setIsRecording]);
 
