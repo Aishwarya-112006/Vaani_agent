@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUpRight, Radio, Wifi, WifiOff, Zap } from "lucide-react";
+import { ArrowUpRight, Radio, Zap } from "lucide-react";
 
-import { createSession } from "@/lib/api";
+import { createSession, sendTextMessage } from "@/lib/api";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
 import { Backdrop } from "./backdrop";
+import { DebugPanel } from "./DebugPanel";
 import { PushToTalk } from "./PushToTalk";
 import { SiteHeader } from "./site-header";
 import { Transcript, type Turn } from "./Transcript";
@@ -157,9 +158,7 @@ export function VoiceAgent() {
   const [sendingAudio, setSendingAudio] = useState(false);
 
   // Real-time backend state via WebSocket
-  const { state: wsState, connected: wsConnected } = useWebSocket(
-    mounted ? session : null
-  );
+  const { state: wsState, connected: wsConnected } = useWebSocket(mounted ? session : null);
 
   const currentTurn = useRef(0);
   const timers = useRef<number[]>([]);
@@ -227,6 +226,12 @@ export function VoiceAgent() {
 
       const type = classify(text, task);
 
+      if (session && session !== "pending") {
+        void sendTextMessage(session, text, type).catch((err) =>
+          pushLog("stale", err instanceof Error ? err.message : "message failed"),
+        );
+      }
+
       if (status === "RUNNING" && type === "STATUS") {
         setInterrupt("STATUS");
         pushLog("interrupt", "STATUS · tool continues running");
@@ -255,7 +260,7 @@ export function VoiceAgent() {
       if (status === "RUNNING") pushLog("interrupt", `${type || "REFINE"} · old task fenced`);
       runTool(next, n);
     },
-    [addAssistant, pushLog, runTool, status, task],
+    [addAssistant, pushLog, runTool, session, status, task],
   );
 
   useEffect(() => {
@@ -348,17 +353,49 @@ export function VoiceAgent() {
               sessionId={session}
               disabled={!mounted || session === "pending"}
               onBusyChange={setSendingAudio}
-              onSent={({ turn_id, bytes }) => {
+              onSent={({ turn_id, transcript, interrupt_type }) => {
+                const spoken = transcript?.trim();
+                if (!spoken) {
+                  pushLog("stale", "STT returned empty transcript");
+                  return;
+                }
+
                 if (typeof turn_id === "number") {
                   currentTurn.current = turn_id;
                   setTurnId(turn_id);
                 }
-                const kb = (bytes / 1024).toFixed(1);
-                setTurns((x) => [
-                  ...x,
-                  { role: "user", text: `Voice clip sent (${kb} KB)`, time: now() },
-                ]);
-                pushLog("turn", `USER · voice clip ${bytes} bytes → /message`);
+
+                setTurns((x) => [...x, { role: "user", text: spoken, time: now() }]);
+                pushLog("turn", `USER · ${spoken} (voice/STT)`);
+
+                const type = (interrupt_type as Interrupt | null) || classify(spoken, task);
+                setInterrupt(type);
+
+                if (status === "RUNNING" && type === "STATUS") {
+                  pushLog("interrupt", "STATUS · tool continues running");
+                  addAssistant(
+                    `Still searching for ${task?.type ?? "results"}. I will speak the result as soon as it is ready.`,
+                  );
+                  return;
+                }
+
+                if (type === "CANCEL") {
+                  setStatus("CANCELLED");
+                  setTask(null);
+                  pushLog("interrupt", "CANCEL · in-flight search fenced");
+                  addAssistant("Okay, I have stopped the search. What would you like instead?");
+                  return;
+                }
+
+                const next = parseTask(spoken, status === "RUNNING" ? task : null);
+                if (status === "RUNNING") {
+                  pushLog("interrupt", `${type || "REFINE"} · old task fenced`);
+                }
+                const n = typeof turn_id === "number" ? turn_id : currentTurn.current + 1;
+                currentTurn.current = n;
+                setTurnId(n);
+                setRequestId(next.tool_call_id);
+                runTool(next, n);
               }}
               onError={(message) => pushLog("stale", message)}
             />
@@ -387,85 +424,35 @@ export function VoiceAgent() {
           </div>
         </div>
 
-        <aside className="glass-card h-fit p-5">
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold tracking-[.2em] text-brand-cyan">JUDGE PANEL</p>
-              <h2 className="mt-1 font-semibold">Live debug</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              {wsConnected ? (
-                <Wifi className="size-3 text-brand-lime" aria-label="WebSocket connected" />
-              ) : (
-                <WifiOff className="size-3 text-muted-foreground" aria-label="WebSocket disconnected" />
-              )}
-              <span className="size-2 animate-pulse rounded-full bg-brand-lime" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Metric
-              label="turn_id"
-              value={String(wsState?.turn_id ?? turnId)}
-              tone="violet"
-            />
-            <Metric
-              label="tool_status"
-              value={wsState?.tool_status ?? status}
-              tone={
-                (wsState?.tool_status ?? status) === "RUNNING"
-                  ? "lime"
-                  : (wsState?.tool_status ?? status) === "CANCELLED"
-                    ? "rose"
-                    : "muted"
-              }
-            />
-            <Metric
-              label="interrupt_type"
-              value={wsState?.last_interrupt_type ?? interrupt ?? "—"}
-              tone="cyan"
-            />
-            <Metric
-              label="stale_discarded"
-              value={String(wsState?.stale_discarded ?? stale)}
-              tone="amber"
-            />
-            <Metric label="tool_call_id" value={requestId} tone="muted" />
-            <Metric
-              label="active_task"
-              value={
-                wsState?.current_task && Object.keys(wsState.current_task).length > 0
-                  ? String(wsState.current_task["type"] ?? task?.type ?? "—")
-                  : task
-                    ? task.type
-                    : "—"
-              }
-              tone="violet"
-            />
-          </div>
-          <div className="mt-4 rounded-xl border border-border bg-background/50 p-3 font-mono text-[11px] leading-5 text-muted-foreground">
-            <div className="mb-2 flex items-center gap-2 text-foreground">
+        <div className="flex flex-col gap-4">
+          <DebugPanel state={wsState} connected={wsConnected} />
+
+          <aside className="glass-card p-5">
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
               <Zap className="size-3 text-brand-amber" /> event stream
             </div>
-            <AnimatePresence initial={false}>
-              {logs.length ? (
-                logs.slice(0, 7).map((log) => (
-                  <motion.div
-                    key={log.text}
-                    layout
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0 }}
-                    className={log.kind === "stale" ? "text-brand-rose" : ""}
-                  >
-                    {log.text}
-                  </motion.div>
-                ))
-              ) : (
-                <span>Awaiting first turn…</span>
-              )}
-            </AnimatePresence>
-          </div>
-        </aside>
+            <div className="rounded-xl border border-border bg-background/50 p-3 font-mono text-[11px] leading-5 text-muted-foreground">
+              <AnimatePresence initial={false}>
+                {logs.length ? (
+                  logs.slice(0, 7).map((log) => (
+                    <motion.div
+                      key={log.text}
+                      layout
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0 }}
+                      className={log.kind === "stale" ? "text-brand-rose" : ""}
+                    >
+                      {log.text}
+                    </motion.div>
+                  ))
+                ) : (
+                  <span>Awaiting first turn…</span>
+                )}
+              </AnimatePresence>
+            </div>
+          </aside>
+        </div>
       </section>
 
       <section className="relative z-10 py-20">
@@ -513,40 +500,7 @@ export function VoiceAgent() {
   );
 }
 
-function Metric({ label, value, tone }: { label: string; value: string; tone: string }) {
-  const toneClass =
-    tone === "violet"
-      ? "text-brand-violet"
-      : tone === "lime"
-        ? "text-brand-lime"
-        : tone === "amber"
-          ? "text-brand-amber"
-          : tone === "cyan"
-            ? "text-brand-cyan"
-            : tone === "rose"
-              ? "text-brand-rose"
-              : "text-muted-foreground";
-
-  return (
-    <div className="rounded-xl border border-border bg-card/60 p-3">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.p
-          key={value}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          transition={{ duration: 0.2 }}
-          className={`mt-2 truncate font-mono text-sm font-semibold ${toneClass}`}
-        >
-          {value}
-        </motion.p>
-      </AnimatePresence>
-    </div>
-  );
-}
-
-export function SectionTitle({ eyebrow, title }: { eyebrow: string; title: string }) {
+function SectionTitle({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 18 }}

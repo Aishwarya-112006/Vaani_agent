@@ -1,11 +1,18 @@
-import uuid
+import asyncio
 import logging
 import json
+import re
+import uuid
 from datetime import datetime, timezone
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from typing import Optional
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+
 from .models import SessionResponse, MessageResponse, StatusResponse, EvaluateResponse
-from agent.state import create_session, get_session
+from agent.state import create_session, get_session, ConversationState
+from agent.stt import groq_transcribe
+
 
 # Structured JSON logger
 class JSONFormatter(logging.Formatter):
@@ -22,6 +29,7 @@ class JSONFormatter(logging.Formatter):
         if hasattr(record, "tool_id"):
             log_data["tool_id"] = record.tool_id
         return json.dumps(log_data)
+
 
 handler = logging.StreamHandler()
 handler.setFormatter(JSONFormatter())
@@ -50,13 +58,14 @@ class ConnectionManager:
     def disconnect(self, session_id: str):
         self.active_connections.pop(session_id, None)
 
-    async def broadcast_state(self, session_id: str, state):
+    async def broadcast_state(self, session_id: str, state: ConversationState):
         websocket = self.active_connections.get(session_id)
         if websocket:
             try:
                 await websocket.send_json(state.to_dict())
             except Exception as e:
                 logger.error(f"WebSocket send error: {e}")
+
 
 manager = ConnectionManager()
 
@@ -72,6 +81,48 @@ def log_event(event: str, session_id: str = None, turn_id: int = None, tool_id: 
     logger.info(event, extra=extra)
 
 
+async def _complete_tool(session_id: str, turn_id: int, request_id: str) -> None:
+    """Simulate an in-flight tool finishing; discard if the turn was fenced."""
+    await asyncio.sleep(3)
+    state = get_session(session_id)
+    if not state:
+        return
+
+    if state.turn_id != turn_id or state.active_request_id != request_id:
+        state.stale_discarded += 1
+        log_event(
+            "stale_discarded",
+            session_id=session_id,
+            turn_id=turn_id,
+            tool_id=request_id,
+        )
+        await manager.broadcast_state(session_id, state)
+        return
+
+    state.tool_status = "COMPLETE"
+    log_event("tool_complete", session_id=session_id, turn_id=turn_id, tool_id=request_id)
+    await manager.broadcast_state(session_id, state)
+
+
+def _classify_interrupt(text: str, state: ConversationState) -> Optional[str]:
+    s = (text or "").lower()
+    if re.search(r"what are you|are you still|how long|status", s):
+        return "STATUS"
+    if re.search(r"forget it|never mind|stop searching|cancel|stop it", s):
+        return "CANCEL"
+    task_type = str(state.current_task.get("type", ""))
+    if task_type == "hotel" and re.search(r"restaurant|food|eat|dinner|cafe", s):
+        return "PIVOT"
+    if task_type == "restaurant" and re.search(r"hotel", s):
+        return "PIVOT"
+    if state.tool_status == "RUNNING" and re.search(
+        r"actually|only|vegetarian|veg|under|metro|near|rupees|₹",
+        s,
+    ):
+        return "REFINE"
+    return None
+
+
 @app.post("/session", response_model=SessionResponse)
 async def create_session_route():
     session_id = str(uuid.uuid4())
@@ -81,8 +132,114 @@ async def create_session_route():
 
 
 @app.post("/message", response_model=MessageResponse)
-async def handle_message():
-    return MessageResponse(status="ok", turn_id=1)
+async def handle_message(
+    session_id: Optional[str] = Form(default=None),
+    text: Optional[str] = Form(default=None),
+    interrupt_type: Optional[str] = Form(default=None),
+    audio: Optional[UploadFile] = File(default=None),
+):
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+
+    state = get_session(session_id)
+    if not state:
+        state = create_session(session_id)
+
+    transcript: Optional[str] = None
+
+    if audio is not None:
+        payload = await audio.read()
+        if not payload:
+            raise HTTPException(status_code=400, detail="Empty audio clip")
+
+        try:
+            transcript = await groq_transcribe(payload, audio.filename or "clip.webm")
+        except Exception as exc:
+            log_event("stt_failed", session_id=session_id)
+            raise HTTPException(status_code=502, detail=f"Speech-to-text failed: {exc}") from exc
+
+        if not transcript:
+            raise HTTPException(status_code=400, detail="Could not understand audio — try again")
+
+        text = transcript
+        state.history.append(
+            {
+                "role": "user",
+                "kind": "audio",
+                "filename": audio.filename,
+                "bytes": len(payload),
+                "transcript": transcript,
+            }
+        )
+        log_event("stt_ok", session_id=session_id)
+
+    classified = interrupt_type or _classify_interrupt(text or "", state)
+
+    # STATUS: answer without fencing the in-flight tool
+    if classified == "STATUS" and state.tool_status == "RUNNING":
+        state.last_interrupt_type = "STATUS"
+        log_event("interrupt_status", session_id=session_id, turn_id=state.turn_id)
+        await manager.broadcast_state(session_id, state)
+        return MessageResponse(
+            status="ok",
+            turn_id=state.turn_id,
+            interrupt_type="STATUS",
+            active_request_id=state.active_request_id,
+            transcript=transcript or text,
+        )
+
+    # Fence previous tool when interrupting a run
+    if state.tool_status == "RUNNING" and state.tool_future and not state.tool_future.done():
+        state.tool_future.cancel()
+
+    if classified == "CANCEL":
+        state.turn_id += 1
+        state.last_interrupt_type = "CANCEL"
+        state.tool_status = "CANCELLED"
+        state.current_task = {}
+        state.active_request_id = None
+        state.tool_future = None
+        log_event("interrupt_cancel", session_id=session_id, turn_id=state.turn_id)
+        await manager.broadcast_state(session_id, state)
+        return MessageResponse(
+            status="ok",
+            turn_id=state.turn_id,
+            interrupt_type="CANCEL",
+            active_request_id=None,
+            transcript=transcript or text,
+        )
+
+    state.turn_id += 1
+    request_id = uuid.uuid4().hex[:8]
+    state.active_request_id = request_id
+    state.last_interrupt_type = classified
+    state.tool_status = "RUNNING"
+    state.current_task = {
+        "type": "restaurant" if text and "restaurant" in text.lower() else "hotel",
+        "raw": text or "",
+        "tool_call_id": request_id,
+    }
+    state.history.append({"role": "user", "kind": "text", "text": text or ""})
+
+    state.tool_future = asyncio.create_task(
+        _complete_tool(session_id, state.turn_id, request_id)
+    )
+
+    log_event(
+        "tool_started",
+        session_id=session_id,
+        turn_id=state.turn_id,
+        tool_id=request_id,
+    )
+    await manager.broadcast_state(session_id, state)
+
+    return MessageResponse(
+        status="ok",
+        turn_id=state.turn_id,
+        interrupt_type=classified,
+        active_request_id=request_id,
+        transcript=transcript or text,
+    )
 
 
 @app.get("/status", response_model=StatusResponse)
@@ -90,7 +247,15 @@ async def get_status(session_id: str):
     state = get_session(session_id)
     if not state:
         raise HTTPException(status_code=404, detail="Session not found")
-    return StatusResponse(**state.to_dict())
+    data = state.to_dict()
+    return StatusResponse(
+        session_id=data["session_id"],
+        turn_id=data["turn_id"],
+        tool_status=data["tool_status"],
+        stale_discarded=data["stale_discarded"],
+        last_interrupt_type=data["last_interrupt_type"],
+        active_request_id=data["active_request_id"],
+    )
 
 
 @app.post("/evaluate", response_model=EvaluateResponse)
@@ -110,6 +275,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     try:
         await manager.broadcast_state(session_id, state)
         while True:
+            # Keepalive / client pings — server pushes on state changes
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(session_id)
