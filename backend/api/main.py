@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from groq import RateLimitError
 from .models import SessionResponse, MessageResponse, StatusResponse, EvaluateResponse
 from agent.state import create_session, get_session, ConversationState
 from agent.stt import groq_transcribe
@@ -154,6 +155,9 @@ async def handle_message(
 
         try:
             transcript = await groq_transcribe(payload, audio.filename or "clip.webm")
+        except RateLimitError as exc:
+            log_event("rate_limit_hit", session_id=session_id)
+            raise HTTPException(status_code=429, detail="Voice service is busy right now. Please wait a moment and try again.") from exc
         except Exception as exc:
             log_event("stt_failed", session_id=session_id)
             raise HTTPException(status_code=502, detail=f"Speech-to-text failed: {exc}") from exc
