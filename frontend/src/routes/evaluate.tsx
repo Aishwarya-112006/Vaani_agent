@@ -23,17 +23,36 @@ export const Route = createFileRoute("/evaluate")({
 type Scenario = { id: string; type: string; description: string; expected: string };
 
 const scenarios: Scenario[] = [
-  { id: "T01", type: "NORMAL", description: "Single hotel search, no interruption", expected: "Correct result spoken" },
-  { id: "T02", type: "NORMAL", description: "Single restaurant search, no interruption", expected: "Correct result spoken" },
-  { id: "T03", type: "NORMAL", description: "LLM tool selection test", expected: "Correct tool chosen" },
-  ...["budget ₹3000", "vegetarian only", "near-metro filter", "budget + veg mid-search", "price ceiling raised"].map(
-    (x, i) => ({
-      id: `T0${i + 4}`,
-      type: "REFINE",
-      description: x,
-      expected: "Old task cancelled, new result correct",
-    }),
-  ),
+  {
+    id: "T01",
+    type: "NORMAL",
+    description: "Single hotel search, no interruption",
+    expected: "Correct result spoken",
+  },
+  {
+    id: "T02",
+    type: "NORMAL",
+    description: "Single restaurant search, no interruption",
+    expected: "Correct result spoken",
+  },
+  {
+    id: "T03",
+    type: "NORMAL",
+    description: "LLM tool selection test",
+    expected: "Correct tool chosen",
+  },
+  ...[
+    "budget ₹3000",
+    "vegetarian only",
+    "near-metro filter",
+    "budget + veg mid-search",
+    "price ceiling raised",
+  ].map((x, i) => ({
+    id: `T0${i + 4}`,
+    type: "REFINE",
+    description: x,
+    expected: "Old task cancelled, new result correct",
+  })),
   ...["location Mumbai", "location Bangalore", "Connaught Place"].map((x, i) => ({
     id: `T${i + 9}`,
     type: "REFINE",
@@ -64,8 +83,18 @@ const scenarios: Scenario[] = [
     description: x,
     expected: "Stale result blocked from Rime",
   })),
-  { id: "T24", type: "MULTI", description: "Three rapid corrections", expected: "Final state reflects all constraints" },
-  { id: "T25", type: "EDGE", description: "Interrupt before tool starts", expected: "Graceful handling, no crash" },
+  {
+    id: "T24",
+    type: "MULTI",
+    description: "Three rapid corrections",
+    expected: "Final state reflects all constraints",
+  },
+  {
+    id: "T25",
+    type: "EDGE",
+    description: "Interrupt before tool starts",
+    expected: "Graceful handling, no crash",
+  },
 ];
 
 const metrics = [
@@ -162,11 +191,21 @@ function EvaluatePage() {
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th scope="col" className="px-5 py-4 font-medium">ID</th>
-                <th scope="col" className="py-4 pr-4 font-medium">Type</th>
-                <th scope="col" className="py-4 pr-4 font-medium">Description</th>
-                <th scope="col" className="py-4 pr-4 font-medium">Expected</th>
-                <th scope="col" className="px-5 py-4 font-medium">Result</th>
+                <th scope="col" className="px-5 py-4 font-medium">
+                  ID
+                </th>
+                <th scope="col" className="py-4 pr-4 font-medium">
+                  Type
+                </th>
+                <th scope="col" className="py-4 pr-4 font-medium">
+                  Description
+                </th>
+                <th scope="col" className="py-4 pr-4 font-medium">
+                  Expected
+                </th>
+                <th scope="col" className="px-5 py-4 font-medium">
+                  Result
+                </th>
               </tr>
             </thead>
             <tbody>
