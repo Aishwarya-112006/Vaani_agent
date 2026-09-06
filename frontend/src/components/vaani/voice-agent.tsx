@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUpRight, Radio, Zap } from "lucide-react";
+import { ArrowUpRight, Radio, Sparkles, Zap } from "lucide-react";
 
 import { createSession } from "@/lib/api";
 
 import { Backdrop } from "./backdrop";
 import { PushToTalk } from "./PushToTalk";
 import { SiteHeader } from "./site-header";
-import { Transcript, type Turn } from "./Transcript";
 
 type Interrupt = "REFINE" | "CANCEL" | "STATUS" | "PIVOT";
 type ToolStatus = "IDLE" | "RUNNING" | "CANCELLED" | "COMPLETE";
 type Task = { type: "hotel" | "restaurant"; params: string; tool_call_id: string };
-export type { Turn };
+type Turn = { role: "user" | "assistant"; text: string; time: string };
 type Log = { kind: "turn" | "tool" | "interrupt" | "stale"; text: string };
 
 const chips = [
@@ -156,6 +155,7 @@ export function VoiceAgent() {
 
   const currentTurn = useRef(0);
   const timers = useRef<number[]>([]);
+  const streamRef = useRef<HTMLDivElement>(null);
 
   const pushLog = useCallback(
     (kind: Log["kind"], text: string) =>
@@ -270,6 +270,9 @@ export function VoiceAgent() {
     };
   }, []);
 
+  useEffect(() => {
+    streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight, behavior: "smooth" });
+  }, [turns]);
 
   return (
     <main className="relative mx-auto min-h-screen max-w-[1440px] px-4 pb-20 sm:px-8 lg:px-12">
@@ -335,7 +338,43 @@ export function VoiceAgent() {
             </span>
           </div>
 
-          <Transcript turns={turns} isBusy={status === "RUNNING"} />
+          <div
+            ref={streamRef}
+            className="flex max-h-[420px] min-h-[300px] flex-col gap-3 overflow-y-auto pr-1"
+          >
+            {turns.length === 0 && (
+              <div className="m-auto text-center">
+                <Sparkles className="mx-auto mb-3 size-7 animate-pulse text-brand-violet" />
+                <p className="text-sm text-foreground">Start a live interruption test</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Try the scenarios below or speak your own.
+                </p>
+              </div>
+            )}
+            <AnimatePresence initial={false}>
+              {turns.map((turn, i) => (
+                <motion.div
+                  key={`${turn.time}-${i}`}
+                  layout
+                  initial={{ opacity: 0, y: 14, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.97 }}
+                  transition={{ type: "spring", stiffness: 320, damping: 28 }}
+                  className={`max-w-[88%] rounded-2xl border p-4 ${
+                    turn.role === "user"
+                      ? "ml-auto border-primary/30 bg-primary/10"
+                      : "border-border bg-card/70"
+                  }`}
+                >
+                  <div className="mb-1 flex justify-between gap-5 text-xs text-muted-foreground">
+                    <span>{turn.role === "user" ? "You" : "Vaani"}</span>
+                    <span className="font-mono">{turn.time}</span>
+                  </div>
+                  <p className="text-sm leading-6">{turn.text}</p>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
 
           <div className="mt-6 flex flex-col items-center border-t border-border pt-6">
             <PushToTalk
