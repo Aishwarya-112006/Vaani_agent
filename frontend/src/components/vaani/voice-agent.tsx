@@ -93,12 +93,26 @@ function classify(text: string, task: Task | null): Interrupt | null {
 function parseTask(text: string, previous?: Task | null): Task {
   const s = text.toLowerCase();
   const type: Task["type"] = /restaurant|food|eat|dinner|cafe/.test(s) ? "restaurant" : "hotel";
-  const city = ["Delhi", "Mumbai", "Bangalore", "Hyderabad", "Chennai", "Pune", "Kolkata", "Goa", "Jaipur"].find(
-    (x) => s.includes(x.toLowerCase()),
-  );
-  const area = ["Connaught Place", "Indiranagar", "Bandra", "Andheri", "Koramangala", "Saket", "Karol Bagh"].find(
-    (x) => s.includes(x.toLowerCase()),
-  );
+  const city = [
+    "Delhi",
+    "Mumbai",
+    "Bangalore",
+    "Hyderabad",
+    "Chennai",
+    "Pune",
+    "Kolkata",
+    "Goa",
+    "Jaipur",
+  ].find((x) => s.includes(x.toLowerCase()));
+  const area = [
+    "Connaught Place",
+    "Indiranagar",
+    "Bandra",
+    "Andheri",
+    "Koramangala",
+    "Saket",
+    "Karol Bagh",
+  ].find((x) => s.includes(x.toLowerCase()));
   const budget = text.match(/(?:under|₹)\s?(\d{3,5})/i)?.[1];
   const values = [
     city ? `city=${city}` : "",
@@ -404,7 +418,11 @@ export function VoiceAgent() {
                 onPointerUp={endRecording}
                 onPointerLeave={endRecording}
                 animate={{ scale: recording ? [1, 1.06, 1] : [1, 1.03, 1] }}
-                transition={{ repeat: Infinity, duration: recording ? 0.7 : 2.4, ease: "easeInOut" }}
+                transition={{
+                  repeat: Infinity,
+                  duration: recording ? 0.7 : 2.4,
+                  ease: "easeInOut",
+                }}
                 whileTap={{ scale: 0.94 }}
                 className={`relative grid size-28 place-items-center rounded-full border-8 text-sm font-semibold text-primary-foreground ${
                   recording
