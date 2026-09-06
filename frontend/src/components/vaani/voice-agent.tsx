@@ -89,17 +89,36 @@ function classify(text: string, task: Task | null): Interrupt | null {
   if (/forget it|never mind|stop searching|cancel|stop it/.test(s)) return "CANCEL";
   if (
     task &&
-    ((task.type === "hotel" && /restaurant|food|eat|dinner|cafe/.test(s)) ||
-      (task.type === "restaurant" && /hotel/.test(s)))
+    ((task.type === "hotel" && /restaurant|food|eat|dinner|cafe|cuisine|thali|lunch/.test(s)) ||
+      (task.type === "restaurant" && /\bhotels?\b|\bstay\b|\broom\b/.test(s)))
   )
     return "PIVOT";
-  if (task && /actually|only|vegetarian|veg|under|metro|near|rupees|₹/.test(s)) return "REFINE";
+  if (
+    task &&
+    /actually|only|vegetarian|veg|under|metro|near|rupees|₹|cuisine|area/.test(s)
+  )
+    return "REFINE";
   return null;
+}
+
+function resolveTaskType(text: string, previous?: Task | null): Task["type"] {
+  const s = text.toLowerCase();
+  const restaurant = /restaurant|food|eat|dinner|cafe|cuisine|thali|lunch|breakfast/.test(s);
+  const hotel = /\bhotels?\b|\bstay\b|\brooms?\b|lodging|accommodation|resort/.test(s);
+  if (restaurant && !hotel) return "restaurant";
+  if (hotel && !restaurant) return "hotel";
+  if (restaurant && hotel) {
+    if (/\brestaurants?\b/.test(s)) return "restaurant";
+    if (/\bhotels?\b/.test(s)) return "hotel";
+  }
+  // REFINE / continuation — keep current tool (don't flip on "veg" / "metro")
+  if (previous?.type) return previous.type;
+  return "hotel";
 }
 
 function parseTask(text: string, previous?: Task | null): Task {
   const s = text.toLowerCase();
-  const type: Task["type"] = /restaurant|food|eat|dinner|cafe/.test(s) ? "restaurant" : "hotel";
+  const type = resolveTaskType(text, previous);
   const city = [
     "Delhi",
     "Mumbai",
@@ -119,17 +138,31 @@ function parseTask(text: string, previous?: Task | null): Task {
     "Koramangala",
     "Saket",
     "Karol Bagh",
+    "Hauz Khas",
   ].find((x) => s.includes(x.toLowerCase()));
   const budget = text.match(/(?:under|₹)\s?(\d{3,5})/i)?.[1];
+  const cuisine = [
+    "South Indian",
+    "North Indian",
+    "Street Food",
+    "Chinese",
+    "Italian",
+    "Cafe",
+    "Indian",
+  ].find((x) => s.includes(x.toLowerCase()));
+
   const values = [
     city ? `city=${city}` : "",
     area ? `area=${area}` : "",
-    budget ? `budget=${budget}` : "",
+    budget && type === "hotel" ? `budget=${budget}` : "",
+    cuisine && type === "restaurant" ? `cuisine=${cuisine}` : "",
     /vegetarian|veg/.test(s) ? "veg_only=true" : "",
-    /metro/.test(s) ? "near_metro=true" : "",
+    /metro/.test(s) && type === "hotel" ? "near_metro=true" : "",
   ].filter(Boolean);
 
-  const merged = previous?.params.split(" · ").filter(Boolean) ?? [];
+  // Only merge params when refining the same tool kind
+  const merged =
+    previous?.type === type ? (previous.params.split(" · ").filter(Boolean) ?? []) : [];
   values.forEach((value) => {
     const key = value.split("=")[0];
     const index = merged.findIndex((x) => x.startsWith(`${key}=`));
@@ -137,9 +170,17 @@ function parseTask(text: string, previous?: Task | null): Task {
     else merged.push(value);
   });
 
+  // Carry city across a pivot
+  if (previous && previous.type !== type) {
+    const prevCity = previous.params.split(" · ").find((x) => x.startsWith("city="));
+    if (prevCity && !merged.some((x) => x.startsWith("city="))) merged.unshift(prevCity);
+  }
+
   return {
     type,
-    params: merged.join(" · ") || (type === "hotel" ? "city=Delhi" : "area=Connaught Place"),
+    params:
+      merged.join(" · ") ||
+      (type === "hotel" ? "city=Delhi" : "city=Delhi · area=Connaught Place · cuisine=Indian"),
     tool_call_id: Math.random().toString(16).slice(2, 10),
   };
 }
