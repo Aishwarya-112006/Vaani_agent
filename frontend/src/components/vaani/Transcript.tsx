@@ -12,6 +12,7 @@ export type Turn = {
 export type TranscriptProps = {
   turns: Turn[];
   isBusy?: boolean;
+  busyLabel?: string;
   emptyTitle?: string;
   emptySubtitle?: string;
   className?: string;
@@ -20,8 +21,9 @@ export type TranscriptProps = {
 export function Transcript({
   turns,
   isBusy = false,
+  busyLabel = "Vaani is thinking",
   emptyTitle = "Start a live interruption test",
-  emptySubtitle = "Try the scenarios below or speak your own.",
+  emptySubtitle = "Try the scenarios below or speak your own — Hinglish chalega.",
   className,
 }: TranscriptProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -101,10 +103,12 @@ export function Transcript({
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.2 }}
             className="mr-auto flex items-center gap-2 rounded-2xl border border-border bg-card/50 px-4 py-3 text-xs text-muted-foreground"
+            role="status"
+            aria-live="polite"
           >
             <Bot className="size-3.5 animate-pulse text-brand-cyan" />
             <span className="inline-flex items-center gap-1">
-              Vaani is thinking
+              {busyLabel}
               <span className="ml-1 inline-flex gap-0.5">
                 <span className="size-1 animate-bounce rounded-full bg-brand-cyan [animation-delay:-0.3s]" />
                 <span className="size-1 animate-bounce rounded-full bg-brand-cyan [animation-delay:-0.15s]" />

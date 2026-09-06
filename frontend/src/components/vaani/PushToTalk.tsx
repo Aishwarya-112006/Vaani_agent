@@ -70,6 +70,7 @@ export function PushToTalk({
 
       setBusy(true);
       onBusyChange?.(true);
+      onRecordingChange?.(false); // clear recording UI the moment upload starts
       try {
         const result = await sendAudioMessage(sessionId, blob);
         onSent?.({ ...result, bytes: blob.size });
@@ -80,7 +81,7 @@ export function PushToTalk({
         onBusyChange?.(false);
       }
     },
-    [onBusyChange, onError, onSent, sessionId],
+    [onBusyChange, onError, onRecordingChange, onSent, sessionId],
   );
 
   const startRecording = useCallback(async () => {
@@ -171,10 +172,10 @@ export function PushToTalk({
   };
 
   const hint = busy
-    ? "Sending audio to /message…"
+    ? "Audio bhej rahi hoon… STT chal raha hai"
     : recording
-      ? "Recording… release to send"
-      : "Hold the button or press spacebar";
+      ? "Recording… chhodo to send"
+      : "Hold mic / Space — Hinglish chalega";
 
   return (
     <div className="flex flex-col items-center">

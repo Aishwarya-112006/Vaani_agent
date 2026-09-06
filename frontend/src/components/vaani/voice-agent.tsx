@@ -2,9 +2,25 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpRight, Radio, Zap } from "lucide-react";
 
-import { createSession, fetchRimeSpeech, sendTextMessage } from "@/lib/api";
-import { playRimeAudio, unlockAudio } from "@/lib/audio";
-import { useWebSocket } from "@/hooks/useWebSocket";
+import { createSession, sendTextMessage } from "@/lib/api";
+import { unlockAudio } from "@/lib/audio";
+import {
+  ackCancel,
+  ackPivot,
+  ackRefine,
+  ackSearch,
+  ackStatus,
+  errNetwork,
+  errSttEmpty,
+  errTts,
+  phaseLabel,
+  resultHotels,
+  resultRestaurants,
+  searchFiller,
+  type PipelinePhase,
+} from "@/lib/copy";
+import { speakLine, stopSpeaking } from "@/lib/speak";
+import { useWebSocket, type ToolResult } from "@/hooks/useWebSocket";
 
 import { Backdrop } from "./backdrop";
 import { DebugPanel } from "./DebugPanel";
@@ -198,12 +214,51 @@ export function VoiceAgent() {
   const [session, setSession] = useState("pending");
   const [mounted, setMounted] = useState(false);
   const [sendingAudio, setSendingAudio] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [phase, setPhase] = useState<PipelinePhase>("idle");
+  const [phaseDetail, setPhaseDetail] = useState<string | undefined>();
+  const [bannerError, setBannerError] = useState<string | null>(null);
 
   // Real-time backend state via WebSocket
   const { state: wsState, connected: wsConnected } = useWebSocket(mounted ? session : null);
 
   const currentTurn = useRef(0);
   const timers = useRef<number[]>([]);
+  const searchPulse = useRef<number | null>(null);
+  const searchTick = useRef(0);
+  const toolRunningRef = useRef(false);
+  const pendingResultRef = useRef(false);
+  const spokenRequestRef = useRef<string | null>(null);
+  const taskRef = useRef<Task | null>(null);
+
+  const clearLocalTimers = useCallback(() => {
+    timers.current.forEach((id) => window.clearTimeout(id));
+    timers.current = [];
+  }, []);
+
+  const clearSearchPulse = useCallback(() => {
+    if (searchPulse.current != null) {
+      window.clearInterval(searchPulse.current);
+      searchPulse.current = null;
+    }
+    searchTick.current = 0;
+  }, []);
+
+  const startSearchPulse = useCallback(() => {
+    clearSearchPulse();
+    searchPulse.current = window.setInterval(() => {
+      searchTick.current += 1;
+      setPhase("searching");
+      setPhaseDetail(searchFiller(searchTick.current));
+    }, 1000);
+  }, [clearSearchPulse]);
+
+  const fenceLocalTool = useCallback(() => {
+    clearLocalTimers();
+    clearSearchPulse();
+    toolRunningRef.current = false;
+    pendingResultRef.current = false;
+  }, [clearLocalTimers, clearSearchPulse]);
 
   const pushLog = useCallback(
     (kind: Log["kind"], text: string) =>
@@ -211,24 +266,34 @@ export function VoiceAgent() {
     [],
   );
 
-  const speak = useCallback(async (text: string) => {
-    if (typeof window === "undefined" || !text.trim()) return;
-    try {
-      // Context should already be unlocked from the user gesture that triggered this turn
-      await unlockAudio();
-      const bytes = await fetchRimeSpeech(text);
-      await playRimeAudio(bytes);
-    } catch (err) {
-      pushLog("stale", err instanceof Error ? `TTS · ${err.message}` : "TTS failed");
-      // Fallback so the demo still talks if Rime is down
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "en-IN";
-        window.speechSynthesis.speak(utterance);
-      }
-    }
-  }, [pushLog]);
+  const setPipeline = useCallback((next: PipelinePhase, detail?: string) => {
+    setPhase(next);
+    setPhaseDetail(detail);
+    if (next !== "error") setBannerError(null);
+  }, []);
+
+  const speak = useCallback(
+    async (text: string) => {
+      if (typeof window === "undefined" || !text.trim()) return;
+      setPipeline("speaking");
+      await speakLine(text, {
+        onWaiting: () => setPipeline("speaking", "Voice ready hone wali hai…"),
+        onPlaying: () => setPipeline("speaking"),
+        onDone: () => {
+          if (toolRunningRef.current) {
+            setPipeline("searching", searchFiller(searchTick.current));
+          } else {
+            setPipeline("idle");
+          }
+        },
+        onError: (message) => {
+          pushLog("stale", `TTS · ${message}`);
+          setBannerError(errTts());
+        },
+      });
+    },
+    [pushLog, setPipeline],
+  );
 
   const addAssistant = useCallback(
     (text: string) => {
@@ -238,36 +303,122 @@ export function VoiceAgent() {
     [speak],
   );
 
+  const failLoud = useCallback(
+    (message: string) => {
+      fenceLocalTool();
+      setBannerError(message);
+      setPipeline("error", message);
+      pushLog("stale", message);
+      addAssistant(message);
+    },
+    [addAssistant, fenceLocalTool, pushLog, setPipeline],
+  );
+
+  const lineFromToolResult = useCallback((result: ToolResult, fallbackTask: Task | null) => {
+    if (typeof result.summary === "string" && result.summary.trim()) {
+      return result.summary.trim();
+    }
+    const params = result.params ?? {};
+    const city = String(
+      params["city"] ?? fallbackTask?.params.match(/city=([^ ·]+)/)?.[1] ?? "Delhi",
+    );
+    if (result.tool === "search_restaurants" || fallbackTask?.type === "restaurant") {
+      const area = String(
+        params["area"] ?? fallbackTask?.params.match(/area=([^ ·]+)/)?.[1] ?? city,
+      );
+      return resultRestaurants(area);
+    }
+    const budget = String(
+      params["budget"] ?? fallbackTask?.params.match(/budget=(\d+)/)?.[1] ?? "5000",
+    );
+    return resultHotels(city, budget);
+  }, []);
+
+  const completeFromBackend = useCallback(
+    (requestId: string, result: ToolResult, source: "ws" | "fallback") => {
+      if (!pendingResultRef.current) return;
+      if (spokenRequestRef.current === requestId) return;
+
+      pendingResultRef.current = false;
+      spokenRequestRef.current = requestId;
+      clearLocalTimers();
+      clearSearchPulse();
+      toolRunningRef.current = false;
+      setStatus("COMPLETE");
+      setRequestId(requestId);
+      pushLog(
+        "tool",
+        `COMPLETE ${result.tool ?? taskRef.current?.type ?? "tool"} · ${source} result → Rime`,
+      );
+      addAssistant(lineFromToolResult(result, taskRef.current));
+    },
+    [addAssistant, clearLocalTimers, clearSearchPulse, lineFromToolResult, pushLog],
+  );
+
   const runTool = useCallback(
-    (next: Task, nextTurn: number) => {
+    (next: Task, nextTurn: number, interruptKind: Interrupt | null) => {
+      stopSpeaking();
+      clearLocalTimers();
+      toolRunningRef.current = true;
+      pendingResultRef.current = true;
+      taskRef.current = next;
+      spokenRequestRef.current = null;
       setTask(next);
       setStatus("RUNNING");
       setRequestId(next.tool_call_id);
       pushLog("tool", `RUNNING ${next.type} · ${next.params}`);
 
-      const id = window.setTimeout(() => {
-        if (nextTurn !== currentTurn.current) {
-          setStale((x) => x + 1);
-          setStatus((s) => (s === "RUNNING" ? "IDLE" : s));
-          pushLog("stale", `STALE BLOCKED — turn ${nextTurn} ≠ current ${currentTurn.current}`);
-          return;
-        }
-        setStatus("COMPLETE");
-        pushLog("tool", `COMPLETE ${next.type} · fresh result reached Rime`);
+      const ack =
+        interruptKind === "PIVOT"
+          ? ackPivot(next.type)
+          : interruptKind === "REFINE"
+            ? ackRefine(next.type)
+            : ackSearch(next.type, next.params);
+
+      setPipeline("acknowledging", ack);
+      addAssistant(ack);
+      startSearchPulse();
+
+      // Fallback if WebSocket / backend result never arrives
+      const fallbackId = window.setTimeout(() => {
+        if (nextTurn !== currentTurn.current) return;
+        if (!pendingResultRef.current) return;
         const p = next.params;
         const city = p.match(/city=([^ ·]+)/)?.[1] || "Delhi";
         const budget = p.match(/budget=(\d+)/)?.[1] || "5000";
-        const result =
-          next.type === "hotel"
-            ? `I found 3 hotels in ${city} under ₹${budget}. Top pick: The Lotus Residency, breakfast included.`
-            : `I found 3 restaurants in ${p.match(/area=([^ ·]+)/)?.[1] || city}. Top pick: Saffron Thali, highly rated and open now.`;
-        addAssistant(result);
-      }, 4000);
-
-      timers.current.push(id);
+        const synthetic: ToolResult = {
+          tool: next.type === "restaurant" ? "search_restaurants" : "search_hotels",
+          summary:
+            next.type === "hotel"
+              ? resultHotels(city, budget)
+              : resultRestaurants(p.match(/area=([^ ·]+)/)?.[1] || city),
+          params: { city, budget: Number(budget) },
+        };
+        completeFromBackend(next.tool_call_id, synthetic, "fallback");
+      }, 5500);
+      timers.current.push(fallbackId);
     },
-    [addAssistant, pushLog],
+    [
+      addAssistant,
+      clearLocalTimers,
+      completeFromBackend,
+      pushLog,
+      setPipeline,
+      startSearchPulse,
+    ],
   );
+
+  const cancelLocal = useCallback(() => {
+    currentTurn.current += 1;
+    setTurnId(currentTurn.current);
+    setInterrupt("CANCEL");
+    setStatus("CANCELLED");
+    setTask(null);
+    taskRef.current = null;
+    fenceLocalTool();
+    pushLog("interrupt", "CANCEL · in-flight search fenced");
+    addAssistant(ackCancel());
+  }, [addAssistant, fenceLocalTool, pushLog]);
 
   const submit = useCallback(
     (raw: string) => {
@@ -276,32 +427,31 @@ export function VoiceAgent() {
       setInput("");
       setTurns((x) => [...x, { role: "user", text, time: now() }]);
       pushLog("turn", `USER · ${text}`);
+      setPipeline("understanding");
 
       const type = classify(text, task);
 
       if (session && session !== "pending") {
         void sendTextMessage(session, text, type).catch((err) =>
-          pushLog("stale", err instanceof Error ? err.message : "message failed"),
+          failLoud(errNetwork(err instanceof Error ? err.message : undefined)),
         );
       }
 
       if (status === "RUNNING" && type === "STATUS") {
         setInterrupt("STATUS");
         pushLog("interrupt", "STATUS · tool continues running");
-        addAssistant(
-          `Still searching for ${task?.type ?? "results"}. I will speak the result as soon as it is ready.`,
-        );
+        addAssistant(ackStatus(task?.type));
+        return;
+      }
+
+      if (type === "STATUS") {
+        setInterrupt("STATUS");
+        addAssistant(ackStatus(task?.type));
         return;
       }
 
       if (type === "CANCEL") {
-        currentTurn.current += 1;
-        setTurnId(currentTurn.current);
-        setInterrupt("CANCEL");
-        setStatus("CANCELLED");
-        setTask(null);
-        pushLog("interrupt", "CANCEL · in-flight search fenced");
-        addAssistant("Okay, I have stopped the search. What would you like instead?");
+        cancelLocal();
         return;
       }
 
@@ -309,31 +459,106 @@ export function VoiceAgent() {
       currentTurn.current += 1;
       const n = currentTurn.current;
       setTurnId(n);
-      setInterrupt(type || (status === "RUNNING" ? "REFINE" : null));
-      if (status === "RUNNING") pushLog("interrupt", `${type || "REFINE"} · old task fenced`);
-      runTool(next, n);
+      const kind = type || (status === "RUNNING" ? "REFINE" : null);
+      setInterrupt(kind);
+      if (status === "RUNNING") pushLog("interrupt", `${kind || "REFINE"} · old task fenced`);
+      // Prefer backend request id when the POST returns later — for now use local id;
+      // WS completion matches via turn_id + result payload.
+      runTool(next, n, kind);
     },
-    [addAssistant, pushLog, runTool, session, status, task],
+    [
+      addAssistant,
+      cancelLocal,
+      failLoud,
+      pushLog,
+      runTool,
+      session,
+      setPipeline,
+      status,
+      task,
+    ],
   );
+
+  // Speak real backend tool results (and keep DebugPanel numbers in sync)
+  useEffect(() => {
+    if (!wsState) return;
+
+    if (typeof wsState.stale_discarded === "number") {
+      setStale(wsState.stale_discarded);
+    }
+    if (typeof wsState.turn_id === "number" && wsState.turn_id > currentTurn.current) {
+      currentTurn.current = wsState.turn_id;
+      setTurnId(wsState.turn_id);
+    }
+    if (wsState.last_interrupt_type) {
+      setInterrupt(wsState.last_interrupt_type as Interrupt);
+    }
+
+    if (wsState.tool_status === "RUNNING" && wsState.active_request_id) {
+      setStatus("RUNNING");
+      setRequestId(wsState.active_request_id);
+      if (toolRunningRef.current && taskRef.current) {
+        const remoteType = wsState.current_task["type"];
+        taskRef.current = {
+          ...taskRef.current,
+          tool_call_id: wsState.active_request_id,
+          type:
+            remoteType === "hotel" || remoteType === "restaurant"
+              ? remoteType
+              : taskRef.current.type,
+        };
+        setTask(taskRef.current);
+      }
+    }
+
+    if (wsState.tool_status === "CANCELLED") {
+      setStatus("CANCELLED");
+      // Don't speak cancel twice if we already handled locally
+      fenceLocalTool();
+      return;
+    }
+
+    if (wsState.tool_status === "COMPLETE" && wsState.last_tool_result) {
+      const remoteCallId = wsState.current_task["tool_call_id"];
+      const req =
+        wsState.active_request_id ||
+        (typeof remoteCallId === "string" ? remoteCallId : null) ||
+        spokenRequestRef.current ||
+        `turn-${wsState.turn_id}`;
+      completeFromBackend(req, wsState.last_tool_result, "ws");
+    }
+  }, [completeFromBackend, fenceLocalTool, wsState]);
 
   useEffect(() => {
     setMounted(true);
     let cancelled = false;
 
-    createSession()
-      .then((created) => {
-        if (!cancelled) setSession(created.session_id);
-      })
-      .catch(() => {
-        if (!cancelled) setSession(crypto.randomUUID());
-      });
+    const bootSession = async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const created = await createSession();
+          if (!cancelled) setSession(created.session_id);
+          return;
+        } catch {
+          await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+        }
+      }
+      if (!cancelled) {
+        setSession("pending");
+        setBannerError("Backend session nahi bani — backend :8000 check karo.");
+        setPipeline("error", "Session create failed");
+      }
+    };
 
-    const pending = timers.current;
+    void bootSession();
+
     return () => {
       cancelled = true;
-      pending.forEach((id) => window.clearTimeout(id));
+      clearLocalTimers();
+      if (searchPulse.current != null) window.clearInterval(searchPulse.current);
+      stopSpeaking();
     };
-  }, []);
+  }, [clearLocalTimers, setPipeline]);
 
   return (
     <main
@@ -407,19 +632,58 @@ export function VoiceAgent() {
             </span>
           </div>
 
-          <Transcript turns={turns} isBusy={status === "RUNNING" || sendingAudio} />
+          <Transcript
+            turns={turns}
+            isBusy={
+              recording ||
+              sendingAudio ||
+              phase === "searching" ||
+              phase === "understanding" ||
+              phase === "acknowledging" ||
+              phase === "uploading" ||
+              phase === "speaking"
+            }
+            busyLabel={
+              recording
+                ? phaseLabel("recording")
+                : sendingAudio
+                  ? phaseLabel("uploading")
+                  : phaseLabel(phase, phaseDetail) || "Vaani soch rahi hai…"
+            }
+          />
+
+          {bannerError ? (
+            <div
+              role="alert"
+              className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-brand-rose"
+            >
+              {bannerError}
+            </div>
+          ) : null}
 
           <div className="mt-6 flex flex-col items-center border-t border-border pt-6">
             <PushToTalk
               sessionId={session}
               disabled={!mounted || session === "pending"}
-              onBusyChange={setSendingAudio}
+              onRecordingChange={(isRec) => {
+                setRecording(isRec);
+                if (isRec) {
+                  setBannerError(null);
+                  setPipeline("recording");
+                }
+              }}
+              onBusyChange={(busy) => {
+                setSendingAudio(busy);
+                if (busy) setPipeline("uploading");
+              }}
               onSent={({ turn_id, transcript, interrupt_type }) => {
                 const spoken = transcript?.trim();
                 if (!spoken) {
-                  pushLog("stale", "STT returned empty transcript");
+                  failLoud(errSttEmpty());
                   return;
                 }
+
+                setPipeline("understanding");
 
                 if (typeof turn_id === "number") {
                   currentTurn.current = turn_id;
@@ -434,31 +698,32 @@ export function VoiceAgent() {
 
                 if (status === "RUNNING" && type === "STATUS") {
                   pushLog("interrupt", "STATUS · tool continues running");
-                  addAssistant(
-                    `Still searching for ${task?.type ?? "results"}. I will speak the result as soon as it is ready.`,
-                  );
+                  addAssistant(ackStatus(task?.type));
+                  return;
+                }
+
+                if (type === "STATUS") {
+                  addAssistant(ackStatus(task?.type));
                   return;
                 }
 
                 if (type === "CANCEL") {
-                  setStatus("CANCELLED");
-                  setTask(null);
-                  pushLog("interrupt", "CANCEL · in-flight search fenced");
-                  addAssistant("Okay, I have stopped the search. What would you like instead?");
+                  cancelLocal();
                   return;
                 }
 
                 const next = parseTask(spoken, status === "RUNNING" ? task : null);
+                const kind = type || (status === "RUNNING" ? "REFINE" : null);
                 if (status === "RUNNING") {
-                  pushLog("interrupt", `${type || "REFINE"} · old task fenced`);
+                  pushLog("interrupt", `${kind || "REFINE"} · old task fenced`);
                 }
                 const n = typeof turn_id === "number" ? turn_id : currentTurn.current + 1;
                 currentTurn.current = n;
                 setTurnId(n);
                 setRequestId(next.tool_call_id);
-                runTool(next, n);
+                runTool(next, n, kind);
               }}
-              onError={(message) => pushLog("stale", message)}
+              onError={(message) => failLoud(errNetwork(message))}
             />
 
             <div className="mt-5 flex w-full gap-2">
@@ -471,7 +736,7 @@ export function VoiceAgent() {
                     submit(input);
                   }
                 }}
-                placeholder="Type an interruption…"
+                placeholder="Type an interruption… Hinglish chalega"
                 className="min-w-0 flex-1 rounded-xl border border-border bg-background/60 px-4 py-3 text-sm outline-none transition placeholder:text-muted-foreground focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
               />
               <motion.button
