@@ -17,6 +17,7 @@ from agent.state import create_session, get_session, ConversationState
 from agent.stt import groq_transcribe
 from agent.rime import rime_speak
 from tools.hotel_search import parse_hotel_params, search_hotels
+from tools.restaurant_search import parse_restaurant_params, search_restaurants
 
 
 # Structured JSON logger
@@ -113,6 +114,45 @@ async def _run_search_hotels(
         )
         return
 
+    await _finalize_tool_result(session_id, turn_id, request_id, result)
+
+
+async def _run_search_restaurants(
+    session_id: str,
+    turn_id: int,
+    request_id: str,
+    params: dict,
+) -> None:
+    """Run interruptible search_restaurants; discard stale results after fencing."""
+    state = get_session(session_id)
+    if not state:
+        return
+
+    try:
+        result = await search_restaurants(
+            city=params.get("city", "Delhi"),
+            cuisine=params.get("cuisine", "Indian"),
+            veg_only=bool(params.get("veg_only", False)),
+            area=params.get("area", "Connaught Place"),
+        )
+    except asyncio.CancelledError:
+        log_event(
+            "tool_cancelled",
+            session_id=session_id,
+            turn_id=turn_id,
+            tool_id=request_id,
+        )
+        return
+
+    await _finalize_tool_result(session_id, turn_id, request_id, result)
+
+
+async def _finalize_tool_result(
+    session_id: str,
+    turn_id: int,
+    request_id: str,
+    result: dict,
+) -> None:
     state = get_session(session_id)
     if not state:
         return
@@ -135,6 +175,66 @@ async def _run_search_hotels(
     await manager.broadcast_state(session_id, state)
 
 
+def _restaurant_signal(text: str) -> bool:
+    return bool(
+        re.search(
+            r"\brestaurants?\b|food|eat|dinner|lunch|breakfast|cafe|cuisine|thali|dining",
+            (text or "").lower(),
+        )
+    )
+
+
+def _hotel_signal(text: str) -> bool:
+    # Note: budget / metro alone are hotel REFINE cues, not tool switches
+    return bool(
+        re.search(
+            r"\bhotels?\b|\bstay\b|\brooms?\b|lodging|accommodation|resort",
+            (text or "").lower(),
+        )
+    )
+
+
+def _resolve_tool_kind(
+    text: str,
+    state: ConversationState,
+    interrupt: Optional[str],
+) -> str:
+    """Route to search_hotels vs search_restaurants.
+
+    REFINE keeps the current tool. PIVOT / explicit intents switch.
+    """
+    restaurant = _restaurant_signal(text)
+    hotel = _hotel_signal(text)
+    current = str(state.current_task.get("type", "") or "")
+
+    if interrupt == "PIVOT":
+        if restaurant and not hotel:
+            return "restaurant"
+        if hotel and not restaurant:
+            return "hotel"
+        if restaurant and hotel:
+            if re.search(r"\brestaurants?\b", (text or "").lower()):
+                return "restaurant"
+            if re.search(r"\bhotels?\b", (text or "").lower()):
+                return "hotel"
+        return "restaurant" if current == "hotel" else "hotel"
+
+    if restaurant and not hotel:
+        return "restaurant"
+    if hotel and not restaurant:
+        return "hotel"
+    if restaurant and hotel:
+        if re.search(r"\brestaurants?\b", (text or "").lower()):
+            return "restaurant"
+        if re.search(r"\bhotels?\b", (text or "").lower()):
+            return "hotel"
+
+    # REFINE / continuation — stay on the in-flight (or last) tool
+    if current in ("restaurant", "hotel"):
+        return current
+    return "hotel"
+
+
 def _classify_interrupt(text: str, state: ConversationState) -> Optional[str]:
     s = (text or "").lower()
     if re.search(r"what are you|are you still|how long|status", s):
@@ -142,12 +242,12 @@ def _classify_interrupt(text: str, state: ConversationState) -> Optional[str]:
     if re.search(r"forget it|never mind|stop searching|cancel|stop it", s):
         return "CANCEL"
     task_type = str(state.current_task.get("type", ""))
-    if task_type == "hotel" and re.search(r"restaurant|food|eat|dinner|cafe", s):
+    if task_type == "hotel" and _restaurant_signal(s):
         return "PIVOT"
-    if task_type == "restaurant" and re.search(r"hotel", s):
+    if task_type == "restaurant" and _hotel_signal(s):
         return "PIVOT"
     if state.tool_status == "RUNNING" and re.search(
-        r"actually|only|vegetarian|veg|under|metro|near|rupees|₹",
+        r"actually|only|vegetarian|veg|under|metro|near|rupees|₹|cuisine|area",
         s,
     ):
         return "REFINE"
@@ -251,20 +351,46 @@ async def handle_message(
     state.last_tool_result = None
 
     prev_params = state.current_task.get("params") if isinstance(state.current_task, dict) else None
-    hotel_params = parse_hotel_params(text or "", prev_params if isinstance(prev_params, dict) else None)
+    prev = prev_params if isinstance(prev_params, dict) else None
+    tool_kind = _resolve_tool_kind(text or "", state, classified)
+    same_kind = str(state.current_task.get("type", "")) == tool_kind
 
-    state.current_task = {
-        "type": "hotel",
-        "tool": "search_hotels",
-        "raw": text or "",
-        "tool_call_id": request_id,
-        "params": hotel_params,
-    }
-    state.history.append({"role": "user", "kind": "text", "text": text or ""})
-
-    state.tool_future = asyncio.create_task(
-        _run_search_hotels(session_id, state.turn_id, request_id, hotel_params)
-    )
+    if tool_kind == "restaurant":
+        merge_from = (
+            prev
+            if same_kind
+            else ({k: prev[k] for k in ("city", "veg_only") if k in prev} if prev else None)
+        )
+        tool_params = parse_restaurant_params(text or "", merge_from)
+        state.current_task = {
+            "type": "restaurant",
+            "tool": "search_restaurants",
+            "raw": text or "",
+            "tool_call_id": request_id,
+            "params": tool_params,
+        }
+        state.history.append({"role": "user", "kind": "text", "text": text or ""})
+        state.tool_future = asyncio.create_task(
+            _run_search_restaurants(session_id, state.turn_id, request_id, tool_params)
+        )
+    else:
+        merge_from = (
+            prev
+            if same_kind
+            else ({k: prev[k] for k in ("city", "veg_only") if k in prev} if prev else None)
+        )
+        tool_params = parse_hotel_params(text or "", merge_from)
+        state.current_task = {
+            "type": "hotel",
+            "tool": "search_hotels",
+            "raw": text or "",
+            "tool_call_id": request_id,
+            "params": tool_params,
+        }
+        state.history.append({"role": "user", "kind": "text", "text": text or ""})
+        state.tool_future = asyncio.create_task(
+            _run_search_hotels(session_id, state.turn_id, request_id, tool_params)
+        )
 
     log_event(
         "tool_started",
