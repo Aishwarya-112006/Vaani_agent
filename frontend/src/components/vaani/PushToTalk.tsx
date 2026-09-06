@@ -22,6 +22,7 @@ type PushToTalkProps = {
   sessionId: string;
   disabled?: boolean;
   onRecordingChange?: (recording: boolean) => void;
+  onBusyChange?: (busy: boolean) => void;
   onSent?: (result: PushToTalkSent) => void;
   onError?: (message: string) => void;
 };
@@ -30,6 +31,7 @@ export function PushToTalk({
   sessionId,
   disabled = false,
   onRecordingChange,
+  onBusyChange,
   onSent,
   onError,
 }: PushToTalkProps) {
@@ -66,6 +68,7 @@ export function PushToTalk({
       }
 
       setBusy(true);
+      onBusyChange?.(true);
       try {
         const result = await sendAudioMessage(sessionId, blob);
         onSent?.({ ...result, bytes: blob.size });
@@ -73,9 +76,10 @@ export function PushToTalk({
         onError?.(error instanceof Error ? error.message : "Failed to send audio to /message");
       } finally {
         setBusy(false);
+        onBusyChange?.(false);
       }
     },
-    [onError, onSent, sessionId],
+    [onBusyChange, onError, onSent, sessionId],
   );
 
   const startRecording = useCallback(async () => {

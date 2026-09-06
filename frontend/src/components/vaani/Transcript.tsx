@@ -47,7 +47,7 @@ export function Transcript({
       )}
     >
       {turns.length === 0 && (
-        <div className="m-auto text-center py-8">
+        <div className="m-auto py-8 text-center">
           <Sparkles className="mx-auto mb-3 size-7 animate-pulse text-brand-violet" />
           <p className="text-sm font-medium text-foreground">{emptyTitle}</p>
           <p className="mt-1 text-xs text-muted-foreground">{emptySubtitle}</p>
@@ -59,7 +59,7 @@ export function Transcript({
           const isUser = turn.role === "user";
           return (
             <motion.div
-              key={`${turn.time}-${index}`}
+              key={`${turn.role}-${turn.time}-${index}`}
               layout
               initial={{ opacity: 0, y: 14, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -88,7 +88,7 @@ export function Transcript({
                 </span>
                 <span className="font-mono text-[11px] opacity-75">{turn.time}</span>
               </div>
-              <p className="text-sm leading-6 whitespace-pre-wrap break-words">{turn.text}</p>
+              <p className="whitespace-pre-wrap break-words text-sm leading-6">{turn.text}</p>
             </motion.div>
           );
         })}
@@ -102,13 +102,13 @@ export function Transcript({
             transition={{ duration: 0.2 }}
             className="mr-auto flex items-center gap-2 rounded-2xl border border-border bg-card/50 px-4 py-3 text-xs text-muted-foreground"
           >
-            <Bot className="size-3.5 text-brand-cyan animate-pulse" />
+            <Bot className="size-3.5 animate-pulse text-brand-cyan" />
             <span className="inline-flex items-center gap-1">
               Vaani is thinking
-              <span className="inline-flex gap-0.5 ml-1">
-                <span className="size-1 rounded-full bg-brand-cyan animate-bounce [animation-delay:-0.3s]" />
-                <span className="size-1 rounded-full bg-brand-cyan animate-bounce [animation-delay:-0.15s]" />
-                <span className="size-1 rounded-full bg-brand-cyan animate-bounce" />
+              <span className="ml-1 inline-flex gap-0.5">
+                <span className="size-1 animate-bounce rounded-full bg-brand-cyan [animation-delay:-0.3s]" />
+                <span className="size-1 animate-bounce rounded-full bg-brand-cyan [animation-delay:-0.15s]" />
+                <span className="size-1 animate-bounce rounded-full bg-brand-cyan" />
               </span>
             </span>
           </motion.div>
