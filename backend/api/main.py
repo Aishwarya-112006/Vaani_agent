@@ -1,9 +1,11 @@
 import asyncio
 import logging
 import json
+import os
 import re
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
@@ -11,7 +13,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from groq import RateLimitError
 from pydantic import BaseModel, Field
-from pathlib import Path
 
 from .models import SessionResponse, MessageResponse, StatusResponse, EvaluateResponse
 from agent.state import create_session, get_session, ConversationState
@@ -44,11 +45,18 @@ logging.basicConfig(level=logging.INFO, handlers=[handler])
 logger = logging.getLogger(__name__)
 
 
+def _cors_origins() -> list[str]:
+    raw = os.environ.get("CORS_ORIGINS", "*").strip()
+    if not raw or raw == "*":
+        return ["*"]
+    return [origin.strip() for origin in raw.split(",") if origin.strip()] or ["*"]
+
+
 app = FastAPI(title="VaaniAgent")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -310,8 +318,8 @@ async def handle_message(
 
     classified = interrupt_type or _classify_interrupt(text or "", state)
 
-    # STATUS: answer without fencing the in-flight tool
-    if classified == "STATUS" and state.tool_status == "RUNNING":
+    # STATUS: answer without fencing / without starting a new tool
+    if classified == "STATUS":
         state.last_interrupt_type = "STATUS"
         log_event("interrupt_status", session_id=session_id, turn_id=state.turn_id)
         await manager.broadcast_state(session_id, state)
@@ -428,7 +436,27 @@ async def get_status(session_id: str):
 
 @app.post("/evaluate", response_model=EvaluateResponse)
 async def evaluate():
-    return EvaluateResponse(status="ok", message="evaluation stub")
+    """Point judges at the latest harness output (run compute_metrics.py to refresh)."""
+    candidates = [
+        Path(__file__).resolve().parents[2] / "evaluation" / "results.json",
+        Path(__file__).resolve().parents[1] / "evaluation" / "results.json",
+    ]
+    for path in candidates:
+        if path.is_file():
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                break
+            passed = payload.get("passed")
+            total = payload.get("scenario_count")
+            return EvaluateResponse(
+                status="ok",
+                message=f"Harness results ready: {passed}/{total} passed. GET /evaluate/results for full JSON.",
+            )
+    return EvaluateResponse(
+        status="missing",
+        message="No results.json yet — run: python evaluation/compute_metrics.py",
+    )
 
 
 @app.get("/evaluate/results")

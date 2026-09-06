@@ -208,13 +208,13 @@
   {
     "id": "T20",
     "type": "PIVOT",
-    "description": "hotels → cab",
+    "description": "hotels → restaurants (cab-style domain switch)",
     "expected": "New tool called, old result discarded",
     "steps": [
       { "text": "Find hotels in Delhi under ₹5000", "expect_interrupt": null },
-      { "text": "Actually book a cab instead — find hotels near the airport", "expect_interrupt": "PIVOT", "wait_ms": 80 }
+      { "text": "Forget hotels — find restaurants there instead", "expect_interrupt": "PIVOT", "wait_ms": 80 }
     ],
-    "checks": ["interrupt"]
+    "checks": ["interrupt", "tool_restaurants"]
   },
   {
     "id": "T21",
