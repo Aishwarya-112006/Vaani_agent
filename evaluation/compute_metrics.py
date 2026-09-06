@@ -178,8 +178,8 @@ def run_scenario(client, scenario: dict) -> dict:
 
             expect = step.get("expect_interrupt")
             t0 = time.perf_counter()
-            # Frontend sends interrupt_type when it classifies one — mirror that
-            resp = _post_message(client, session, step["text"], expect)
+            # Do NOT feed interrupt_type — exercise real backend classification
+            resp = _post_message(client, session, step["text"], None)
             latency = (time.perf_counter() - t0) * 1000
             body = resp.json() if resp.status_code == 200 else {"error": resp.text}
             if resp.status_code != 200:

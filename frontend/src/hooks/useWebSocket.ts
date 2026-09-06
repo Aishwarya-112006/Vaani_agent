@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/api";
 
+export type ToolResult = {
+  tool?: string;
+  summary?: string;
+  count?: number;
+  results?: unknown[];
+  params?: Record<string, unknown>;
+  delay_seconds?: number;
+};
+
 export type AgentState = {
   session_id: string;
   turn_id: number;
@@ -9,6 +18,7 @@ export type AgentState = {
   last_interrupt_type: string | null;
   active_request_id: string | null;
   current_task: Record<string, unknown>;
+  last_tool_result?: ToolResult | null;
 };
 
 type UseWebSocketReturn = {
