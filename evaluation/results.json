@@ -1,0 +1,1470 @@
+{
+  "generated_at": "2026-09-06T21:19:47.800728+00:00",
+  "harness": "evaluation/compute_metrics.py",
+  "scenario_count": 25,
+  "passed": 25,
+  "failed": 0,
+  "metrics": {
+    "interrupt_detection": {
+      "value": 100.0,
+      "display": "100.0%",
+      "target": "85%+",
+      "pass": true,
+      "n": 21,
+      "d": 21
+    },
+    "stale_block_rate": {
+      "value": 100.0,
+      "display": "100.0%",
+      "target": "100%",
+      "pass": true,
+      "n": 3,
+      "d": 3
+    },
+    "context_preservation": {
+      "value": 100.0,
+      "display": "100.0%",
+      "target": "90%+",
+      "pass": true,
+      "n": 17,
+      "d": 17
+    },
+    "recovery_latency_ms": {
+      "value": 2.0,
+      "display": "2 ms",
+      "target": "<2000ms",
+      "pass": true,
+      "samples": 21
+    },
+    "status_non_cancel": {
+      "value": 100.0,
+      "display": "100.0%",
+      "target": "100%",
+      "pass": true,
+      "n": 3,
+      "d": 3
+    },
+    "scenarios_passed": {
+      "value": 25,
+      "display": "25/25",
+      "target": "25/25",
+      "pass": true,
+      "n": 25,
+      "d": 25
+    }
+  },
+  "scenarios": [
+    {
+      "id": "T01",
+      "type": "NORMAL",
+      "description": "Single hotel search, no interruption",
+      "expected": "Correct result spoken",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": null,
+      "duration_ms": 160.1,
+      "steps": [
+        {
+          "text": "Find hotels in Delhi under \u20b95000",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "f1045e80",
+          "latency_ms": 4.1
+        }
+      ],
+      "checks": [
+        {
+          "check": "tool_hotels",
+          "pass": true,
+          "detail": "tool=search_hotels",
+          "recovery_ms": null
+        },
+        {
+          "check": "complete",
+          "pass": true,
+          "detail": "status=COMPLETE",
+          "recovery_ms": null
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_hotels",
+        "type": "hotel",
+        "params": {
+          "city": "Delhi",
+          "budget": 5000,
+          "near_metro": false,
+          "veg_only": false
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": null
+      }
+    },
+    {
+      "id": "T02",
+      "type": "NORMAL",
+      "description": "Single restaurant search, no interruption",
+      "expected": "Correct result spoken",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": null,
+      "duration_ms": 93.2,
+      "steps": [
+        {
+          "text": "Find restaurants in Connaught Place",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "dbaf5049",
+          "latency_ms": 1.5
+        }
+      ],
+      "checks": [
+        {
+          "check": "tool_restaurants",
+          "pass": true,
+          "detail": "tool=search_restaurants",
+          "recovery_ms": null
+        },
+        {
+          "check": "complete",
+          "pass": true,
+          "detail": "status=COMPLETE",
+          "recovery_ms": null
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_restaurants",
+        "type": "restaurant",
+        "params": {
+          "city": "Delhi",
+          "cuisine": "Indian",
+          "veg_only": false,
+          "area": "Connaught Place"
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": null
+      }
+    },
+    {
+      "id": "T03",
+      "type": "NORMAL",
+      "description": "LLM tool selection test",
+      "expected": "Correct tool chosen",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": null,
+      "duration_ms": 124.6,
+      "steps": [
+        {
+          "text": "I want South Indian food near Saket",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "0e6bd9e5",
+          "latency_ms": 1.2
+        }
+      ],
+      "checks": [
+        {
+          "check": "tool_restaurants",
+          "pass": true,
+          "detail": "tool=search_restaurants",
+          "recovery_ms": null
+        },
+        {
+          "check": "complete",
+          "pass": true,
+          "detail": "status=COMPLETE",
+          "recovery_ms": null
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_restaurants",
+        "type": "restaurant",
+        "params": {
+          "city": "Delhi",
+          "cuisine": "South Indian",
+          "veg_only": false,
+          "area": "Saket"
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": null
+      }
+    },
+    {
+      "id": "T04",
+      "type": "REFINE",
+      "description": "budget \u20b93000",
+      "expected": "Old task cancelled, new result correct",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 1.9,
+      "duration_ms": 292.3,
+      "steps": [
+        {
+          "text": "Find hotels in Delhi under \u20b95000",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "3f41d696",
+          "latency_ms": 1.1
+        },
+        {
+          "text": "actually under \u20b93000",
+          "expect_interrupt": "REFINE",
+          "interrupt_type": "REFINE",
+          "turn_id": 2,
+          "active_request_id": "e2ce10cc",
+          "latency_ms": 1.9
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['REFINE'] got=['REFINE']",
+          "recovery_ms": 1.9
+        },
+        {
+          "check": "tool_hotels",
+          "pass": true,
+          "detail": "tool=search_hotels",
+          "recovery_ms": 1.9
+        },
+        {
+          "check": "context_city",
+          "pass": true,
+          "detail": "city=Delhi",
+          "recovery_ms": 1.9
+        },
+        {
+          "check": "budget_refined",
+          "pass": true,
+          "detail": "budget=3000",
+          "recovery_ms": 1.9
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_hotels",
+        "type": "hotel",
+        "params": {
+          "city": "Delhi",
+          "budget": 3000,
+          "near_metro": false,
+          "veg_only": false
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": "REFINE"
+      }
+    },
+    {
+      "id": "T05",
+      "type": "REFINE",
+      "description": "vegetarian only",
+      "expected": "Old task cancelled, new result correct",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 2.1,
+      "duration_ms": 357.4,
+      "steps": [
+        {
+          "text": "Find hotels in Delhi under \u20b95000",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "1f332405",
+          "latency_ms": 1.2
+        },
+        {
+          "text": "actually vegetarian only",
+          "expect_interrupt": "REFINE",
+          "interrupt_type": "REFINE",
+          "turn_id": 2,
+          "active_request_id": "6d5e37c1",
+          "latency_ms": 2.1
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['REFINE'] got=['REFINE']",
+          "recovery_ms": 2.1
+        },
+        {
+          "check": "veg_only",
+          "pass": true,
+          "detail": "veg_only=True",
+          "recovery_ms": 2.1
+        },
+        {
+          "check": "context_city",
+          "pass": true,
+          "detail": "city=Delhi",
+          "recovery_ms": 2.1
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_hotels",
+        "type": "hotel",
+        "params": {
+          "city": "Delhi",
+          "budget": 5000,
+          "near_metro": false,
+          "veg_only": true
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": "REFINE"
+      }
+    },
+    {
+      "id": "T06",
+      "type": "REFINE",
+      "description": "near-metro filter",
+      "expected": "Old task cancelled, new result correct",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 1.8,
+      "duration_ms": 294.2,
+      "steps": [
+        {
+          "text": "Find hotels in Delhi under \u20b95000",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "7ef30d61",
+          "latency_ms": 1.4
+        },
+        {
+          "text": "actually near metro",
+          "expect_interrupt": "REFINE",
+          "interrupt_type": "REFINE",
+          "turn_id": 2,
+          "active_request_id": "247e6819",
+          "latency_ms": 1.8
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['REFINE'] got=['REFINE']",
+          "recovery_ms": 1.8
+        },
+        {
+          "check": "near_metro",
+          "pass": true,
+          "detail": "near_metro=True",
+          "recovery_ms": 1.8
+        },
+        {
+          "check": "context_city",
+          "pass": true,
+          "detail": "city=Delhi",
+          "recovery_ms": 1.8
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_hotels",
+        "type": "hotel",
+        "params": {
+          "city": "Delhi",
+          "budget": 5000,
+          "near_metro": true,
+          "veg_only": false
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": "REFINE"
+      }
+    },
+    {
+      "id": "T07",
+      "type": "REFINE",
+      "description": "budget + veg mid-search",
+      "expected": "Old task cancelled, new result correct",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 2.0,
+      "duration_ms": 264.2,
+      "steps": [
+        {
+          "text": "Find hotels in Mumbai under \u20b96000",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "0b666401",
+          "latency_ms": 1.2
+        },
+        {
+          "text": "actually under \u20b94000 and veg only",
+          "expect_interrupt": "REFINE",
+          "interrupt_type": "REFINE",
+          "turn_id": 2,
+          "active_request_id": "077983b8",
+          "latency_ms": 2.0
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['REFINE'] got=['REFINE']",
+          "recovery_ms": 2.0
+        },
+        {
+          "check": "veg_only",
+          "pass": true,
+          "detail": "veg_only=True",
+          "recovery_ms": 2.0
+        },
+        {
+          "check": "context_city",
+          "pass": true,
+          "detail": "city=Mumbai",
+          "recovery_ms": 2.0
+        },
+        {
+          "check": "budget_refined",
+          "pass": true,
+          "detail": "budget=4000",
+          "recovery_ms": 2.0
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_hotels",
+        "type": "hotel",
+        "params": {
+          "city": "Mumbai",
+          "budget": 4000,
+          "near_metro": false,
+          "veg_only": true
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": "REFINE"
+      }
+    },
+    {
+      "id": "T08",
+      "type": "REFINE",
+      "description": "price ceiling raised",
+      "expected": "Old task cancelled, new result correct",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 1.9,
+      "duration_ms": 324.5,
+      "steps": [
+        {
+          "text": "Find hotels in Delhi under \u20b93000",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "7f9e84d3",
+          "latency_ms": 1.2
+        },
+        {
+          "text": "actually under \u20b98000",
+          "expect_interrupt": "REFINE",
+          "interrupt_type": "REFINE",
+          "turn_id": 2,
+          "active_request_id": "457b129c",
+          "latency_ms": 1.9
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['REFINE'] got=['REFINE']",
+          "recovery_ms": 1.9
+        },
+        {
+          "check": "budget_refined",
+          "pass": true,
+          "detail": "budget=8000",
+          "recovery_ms": 1.9
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_hotels",
+        "type": "hotel",
+        "params": {
+          "city": "Delhi",
+          "budget": 8000,
+          "near_metro": false,
+          "veg_only": false
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": "REFINE"
+      }
+    },
+    {
+      "id": "T09",
+      "type": "REFINE",
+      "description": "location Mumbai",
+      "expected": "Updated search with new location",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 2.0,
+      "duration_ms": 326.1,
+      "steps": [
+        {
+          "text": "Find hotels in Delhi under \u20b95000",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "7df218cf",
+          "latency_ms": 1.3
+        },
+        {
+          "text": "actually in Mumbai",
+          "expect_interrupt": "REFINE",
+          "interrupt_type": "REFINE",
+          "turn_id": 2,
+          "active_request_id": "be09a17e",
+          "latency_ms": 2.0
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['REFINE'] got=['REFINE']",
+          "recovery_ms": 2.0
+        },
+        {
+          "check": "city_mumbai",
+          "pass": true,
+          "detail": "city=Mumbai",
+          "recovery_ms": 2.0
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_hotels",
+        "type": "hotel",
+        "params": {
+          "city": "Mumbai",
+          "budget": 5000,
+          "near_metro": false,
+          "veg_only": false
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": "REFINE"
+      }
+    },
+    {
+      "id": "T10",
+      "type": "REFINE",
+      "description": "location Bangalore",
+      "expected": "Updated search with new location",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 2.0,
+      "duration_ms": 293.3,
+      "steps": [
+        {
+          "text": "Find hotels in Delhi under \u20b95000",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "35feb66c",
+          "latency_ms": 1.5
+        },
+        {
+          "text": "actually Bangalore please",
+          "expect_interrupt": "REFINE",
+          "interrupt_type": "REFINE",
+          "turn_id": 2,
+          "active_request_id": "3730bbec",
+          "latency_ms": 2.0
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['REFINE'] got=['REFINE']",
+          "recovery_ms": 2.0
+        },
+        {
+          "check": "city_bangalore",
+          "pass": true,
+          "detail": "city=Bangalore",
+          "recovery_ms": 2.0
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_hotels",
+        "type": "hotel",
+        "params": {
+          "city": "Bangalore",
+          "budget": 5000,
+          "near_metro": false,
+          "veg_only": false
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": "REFINE"
+      }
+    },
+    {
+      "id": "T11",
+      "type": "REFINE",
+      "description": "Connaught Place",
+      "expected": "Updated search with new location",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 1.7,
+      "duration_ms": 361.5,
+      "steps": [
+        {
+          "text": "Find restaurants in Saket",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "35f5b423",
+          "latency_ms": 1.1
+        },
+        {
+          "text": "actually near Connaught Place",
+          "expect_interrupt": "REFINE",
+          "interrupt_type": "REFINE",
+          "turn_id": 2,
+          "active_request_id": "c737a20b",
+          "latency_ms": 1.7
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['REFINE'] got=['REFINE']",
+          "recovery_ms": 1.7
+        },
+        {
+          "check": "tool_restaurants",
+          "pass": true,
+          "detail": "tool=search_restaurants",
+          "recovery_ms": 1.7
+        },
+        {
+          "check": "area_cp",
+          "pass": true,
+          "detail": "area=Connaught Place",
+          "recovery_ms": 1.7
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_restaurants",
+        "type": "restaurant",
+        "params": {
+          "city": "Delhi",
+          "cuisine": "Indian",
+          "veg_only": false,
+          "area": "Connaught Place"
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": "REFINE"
+      }
+    },
+    {
+      "id": "T12",
+      "type": "CANCEL",
+      "description": "forget it",
+      "expected": "Rime acknowledges, no result spoken",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 2.2,
+      "duration_ms": 239.8,
+      "steps": [
+        {
+          "text": "Find hotels in Delhi under \u20b95000",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "97e6c98b",
+          "latency_ms": 1.4
+        },
+        {
+          "text": "forget it",
+          "expect_interrupt": "CANCEL",
+          "interrupt_type": "CANCEL",
+          "turn_id": 2,
+          "active_request_id": null,
+          "latency_ms": 2.2
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['CANCEL'] got=['CANCEL']",
+          "recovery_ms": 2.2
+        },
+        {
+          "check": "cancelled",
+          "pass": true,
+          "detail": "status=CANCELLED",
+          "recovery_ms": 2.2
+        }
+      ],
+      "final": {
+        "tool_status": "CANCELLED",
+        "tool": null,
+        "type": null,
+        "params": null,
+        "stale_discarded": 0,
+        "last_interrupt_type": "CANCEL"
+      }
+    },
+    {
+      "id": "T13",
+      "type": "CANCEL",
+      "description": "never mind",
+      "expected": "Rime acknowledges, no result spoken",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 1.9,
+      "duration_ms": 202.7,
+      "steps": [
+        {
+          "text": "Find restaurants in Delhi",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "636154fc",
+          "latency_ms": 1.8
+        },
+        {
+          "text": "never mind",
+          "expect_interrupt": "CANCEL",
+          "interrupt_type": "CANCEL",
+          "turn_id": 2,
+          "active_request_id": null,
+          "latency_ms": 1.9
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['CANCEL'] got=['CANCEL']",
+          "recovery_ms": 1.9
+        },
+        {
+          "check": "cancelled",
+          "pass": true,
+          "detail": "status=CANCELLED",
+          "recovery_ms": 1.9
+        }
+      ],
+      "final": {
+        "tool_status": "CANCELLED",
+        "tool": null,
+        "type": null,
+        "params": null,
+        "stale_discarded": 0,
+        "last_interrupt_type": "CANCEL"
+      }
+    },
+    {
+      "id": "T14",
+      "type": "CANCEL",
+      "description": "stop searching",
+      "expected": "Rime acknowledges, no result spoken",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 1.6,
+      "duration_ms": 170.0,
+      "steps": [
+        {
+          "text": "Find hotels in Goa under \u20b94000",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "caa4d3dc",
+          "latency_ms": 1.1
+        },
+        {
+          "text": "stop searching",
+          "expect_interrupt": "CANCEL",
+          "interrupt_type": "CANCEL",
+          "turn_id": 2,
+          "active_request_id": null,
+          "latency_ms": 1.6
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['CANCEL'] got=['CANCEL']",
+          "recovery_ms": 1.6
+        },
+        {
+          "check": "cancelled",
+          "pass": true,
+          "detail": "status=CANCELLED",
+          "recovery_ms": 1.6
+        }
+      ],
+      "final": {
+        "tool_status": "CANCELLED",
+        "tool": null,
+        "type": null,
+        "params": null,
+        "stale_discarded": 0,
+        "last_interrupt_type": "CANCEL"
+      }
+    },
+    {
+      "id": "T15",
+      "type": "STATUS",
+      "description": "what are you searching",
+      "expected": "Status spoken, tool continues running",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 2.0,
+      "duration_ms": 232.4,
+      "steps": [
+        {
+          "text": "Find hotels in Delhi under \u20b95000",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "e2de7d91",
+          "latency_ms": 1.2
+        },
+        {
+          "text": "what are you searching",
+          "expect_interrupt": "STATUS",
+          "interrupt_type": "STATUS",
+          "turn_id": 2,
+          "active_request_id": "2d46b0a5",
+          "latency_ms": 2.0
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['STATUS'] got=['STATUS']",
+          "recovery_ms": 2.0
+        },
+        {
+          "check": "status_keeps_running",
+          "pass": true,
+          "detail": "status=RUNNING req=2d46b0a5",
+          "recovery_ms": 2.0
+        }
+      ],
+      "final": {
+        "tool_status": "RUNNING",
+        "tool": "search_hotels",
+        "type": "hotel",
+        "params": {
+          "city": "Delhi",
+          "budget": 5000,
+          "near_metro": false,
+          "veg_only": false
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": "STATUS"
+      }
+    },
+    {
+      "id": "T16",
+      "type": "STATUS",
+      "description": "still looking",
+      "expected": "Status spoken, tool continues running",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 1.9,
+      "duration_ms": 169.8,
+      "steps": [
+        {
+          "text": "Find restaurants in Mumbai",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "649e8b50",
+          "latency_ms": 1.0
+        },
+        {
+          "text": "are you still looking",
+          "expect_interrupt": "STATUS",
+          "interrupt_type": "STATUS",
+          "turn_id": 2,
+          "active_request_id": "cf168e1f",
+          "latency_ms": 1.9
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['STATUS'] got=['STATUS']",
+          "recovery_ms": 1.9
+        },
+        {
+          "check": "status_keeps_running",
+          "pass": true,
+          "detail": "status=RUNNING req=cf168e1f",
+          "recovery_ms": 1.9
+        }
+      ],
+      "final": {
+        "tool_status": "RUNNING",
+        "tool": "search_restaurants",
+        "type": "restaurant",
+        "params": {
+          "city": "Mumbai",
+          "cuisine": "Indian",
+          "veg_only": false,
+          "area": "Connaught Place"
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": "STATUS"
+      }
+    },
+    {
+      "id": "T17",
+      "type": "STATUS",
+      "description": "how long",
+      "expected": "Status spoken, tool continues running",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 1.6,
+      "duration_ms": 201.4,
+      "steps": [
+        {
+          "text": "Find hotels in Pune under \u20b93500",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "48779fd2",
+          "latency_ms": 1.1
+        },
+        {
+          "text": "how long will this take",
+          "expect_interrupt": "STATUS",
+          "interrupt_type": "STATUS",
+          "turn_id": 2,
+          "active_request_id": "0aaeb8af",
+          "latency_ms": 1.6
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['STATUS'] got=['STATUS']",
+          "recovery_ms": 1.6
+        },
+        {
+          "check": "status_keeps_running",
+          "pass": true,
+          "detail": "status=RUNNING req=0aaeb8af",
+          "recovery_ms": 1.6
+        }
+      ],
+      "final": {
+        "tool_status": "RUNNING",
+        "tool": "search_hotels",
+        "type": "hotel",
+        "params": {
+          "city": "Pune",
+          "budget": 3500,
+          "near_metro": false,
+          "veg_only": false
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": "STATUS"
+      }
+    },
+    {
+      "id": "T18",
+      "type": "PIVOT",
+      "description": "hotels \u2192 restaurants",
+      "expected": "New tool called, old result discarded",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 1.7,
+      "duration_ms": 290.6,
+      "steps": [
+        {
+          "text": "Find hotels in Delhi under \u20b95000",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "7f5dd0e9",
+          "latency_ms": 1.1
+        },
+        {
+          "text": "Find restaurants there instead",
+          "expect_interrupt": "PIVOT",
+          "interrupt_type": "PIVOT",
+          "turn_id": 2,
+          "active_request_id": "9da8e1ba",
+          "latency_ms": 1.7
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['PIVOT'] got=['PIVOT']",
+          "recovery_ms": 1.7
+        },
+        {
+          "check": "tool_restaurants",
+          "pass": true,
+          "detail": "tool=search_restaurants",
+          "recovery_ms": 1.7
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_restaurants",
+        "type": "restaurant",
+        "params": {
+          "city": "Delhi",
+          "cuisine": "Indian",
+          "veg_only": false,
+          "area": "Connaught Place"
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": "PIVOT"
+      }
+    },
+    {
+      "id": "T19",
+      "type": "PIVOT",
+      "description": "restaurants \u2192 hotels",
+      "expected": "New tool called, old result discarded",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 2.0,
+      "duration_ms": 328.0,
+      "steps": [
+        {
+          "text": "Find restaurants in Connaught Place",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "dda2ac04",
+          "latency_ms": 1.2
+        },
+        {
+          "text": "Find hotels instead",
+          "expect_interrupt": "PIVOT",
+          "interrupt_type": "PIVOT",
+          "turn_id": 2,
+          "active_request_id": "eed0d73c",
+          "latency_ms": 2.0
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['PIVOT'] got=['PIVOT']",
+          "recovery_ms": 2.0
+        },
+        {
+          "check": "tool_hotels",
+          "pass": true,
+          "detail": "tool=search_hotels",
+          "recovery_ms": 2.0
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_hotels",
+        "type": "hotel",
+        "params": {
+          "city": "Delhi",
+          "budget": 5000,
+          "near_metro": false,
+          "veg_only": false
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": "PIVOT"
+      }
+    },
+    {
+      "id": "T20",
+      "type": "PIVOT",
+      "description": "hotels \u2192 cab",
+      "expected": "New tool called, old result discarded",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 2.2,
+      "duration_ms": 326.2,
+      "steps": [
+        {
+          "text": "Find hotels in Delhi under \u20b95000",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "01c33e3d",
+          "latency_ms": 1.3
+        },
+        {
+          "text": "Actually book a cab instead \u2014 find hotels near the airport",
+          "expect_interrupt": "PIVOT",
+          "interrupt_type": "PIVOT",
+          "turn_id": 2,
+          "active_request_id": "f88e55d2",
+          "latency_ms": 2.2
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['PIVOT'] got=['PIVOT']",
+          "recovery_ms": 2.2
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_hotels",
+        "type": "hotel",
+        "params": {
+          "city": "Delhi",
+          "budget": 5000,
+          "near_metro": false,
+          "veg_only": false
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": "PIVOT"
+      }
+    },
+    {
+      "id": "T21",
+      "type": "STALE",
+      "description": "extra delay then interrupt",
+      "expected": "Stale result blocked from Rime",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 2.2,
+      "duration_ms": 766.5,
+      "steps": [
+        {
+          "text": "Find hotels in Delhi under \u20b95000",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "534fa002",
+          "latency_ms": 1.1
+        },
+        {
+          "text": "actually under \u20b93000",
+          "expect_interrupt": "REFINE",
+          "interrupt_type": "REFINE",
+          "turn_id": 2,
+          "active_request_id": "14b08ae9",
+          "latency_ms": 2.2
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['REFINE'] got=['REFINE']",
+          "recovery_ms": 2.2
+        },
+        {
+          "check": "stale_blocked",
+          "pass": true,
+          "detail": "stale_discarded=1",
+          "recovery_ms": 2.2
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_hotels",
+        "type": "hotel",
+        "params": {
+          "city": "Delhi",
+          "budget": 3000,
+          "near_metro": false,
+          "veg_only": false
+        },
+        "stale_discarded": 1,
+        "last_interrupt_type": "REFINE"
+      }
+    },
+    {
+      "id": "T22",
+      "type": "STALE",
+      "description": "delayed result",
+      "expected": "Stale result blocked from Rime",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 2.3,
+      "duration_ms": 710.2,
+      "steps": [
+        {
+          "text": "Find restaurants in Delhi",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "b72e63a7",
+          "latency_ms": 1.2
+        },
+        {
+          "text": "actually veg only",
+          "expect_interrupt": "REFINE",
+          "interrupt_type": "REFINE",
+          "turn_id": 2,
+          "active_request_id": "a8b07feb",
+          "latency_ms": 2.3
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['REFINE'] got=['REFINE']",
+          "recovery_ms": 2.3
+        },
+        {
+          "check": "stale_blocked",
+          "pass": true,
+          "detail": "stale_discarded=1",
+          "recovery_ms": 2.3
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_restaurants",
+        "type": "restaurant",
+        "params": {
+          "city": "Delhi",
+          "cuisine": "Indian",
+          "veg_only": true,
+          "area": "Connaught Place"
+        },
+        "stale_discarded": 1,
+        "last_interrupt_type": "REFINE"
+      }
+    },
+    {
+      "id": "T23",
+      "type": "STALE",
+      "description": "late tool response",
+      "expected": "Stale result blocked from Rime",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 2.4,
+      "duration_ms": 770.7,
+      "steps": [
+        {
+          "text": "Find hotels in Jaipur under \u20b94500",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "71cfd343",
+          "latency_ms": 1.2
+        },
+        {
+          "text": "actually near metro",
+          "expect_interrupt": "REFINE",
+          "interrupt_type": "REFINE",
+          "turn_id": 2,
+          "active_request_id": "17dd5efd",
+          "latency_ms": 2.4
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['REFINE'] got=['REFINE']",
+          "recovery_ms": 2.4
+        },
+        {
+          "check": "stale_blocked",
+          "pass": true,
+          "detail": "stale_discarded=1",
+          "recovery_ms": 2.4
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_hotels",
+        "type": "hotel",
+        "params": {
+          "city": "Jaipur",
+          "budget": 4500,
+          "near_metro": true,
+          "veg_only": false
+        },
+        "stale_discarded": 1,
+        "last_interrupt_type": "REFINE"
+      }
+    },
+    {
+      "id": "T24",
+      "type": "MULTI",
+      "description": "Three rapid corrections",
+      "expected": "Final state reflects all constraints",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": 2.0,
+      "duration_ms": 1047.6,
+      "steps": [
+        {
+          "text": "Find hotels in Delhi under \u20b95000",
+          "expect_interrupt": null,
+          "interrupt_type": null,
+          "turn_id": 1,
+          "active_request_id": "bd5a6ec9",
+          "latency_ms": 1.2
+        },
+        {
+          "text": "actually under \u20b93500",
+          "expect_interrupt": "REFINE",
+          "interrupt_type": "REFINE",
+          "turn_id": 2,
+          "active_request_id": "fbc971ff",
+          "latency_ms": 2.0
+        },
+        {
+          "text": "actually vegetarian only",
+          "expect_interrupt": "REFINE",
+          "interrupt_type": "REFINE",
+          "turn_id": 3,
+          "active_request_id": "463b31e4",
+          "latency_ms": 2.2
+        },
+        {
+          "text": "actually near metro",
+          "expect_interrupt": "REFINE",
+          "interrupt_type": "REFINE",
+          "turn_id": 4,
+          "active_request_id": "45967209",
+          "latency_ms": 2.0
+        }
+      ],
+      "checks": [
+        {
+          "check": "interrupt",
+          "pass": true,
+          "detail": "expected=['REFINE', 'REFINE', 'REFINE'] got=['REFINE', 'REFINE', 'REFINE']",
+          "recovery_ms": 2.0
+        },
+        {
+          "check": "veg_only",
+          "pass": true,
+          "detail": "veg_only=True",
+          "recovery_ms": 2.0
+        },
+        {
+          "check": "near_metro",
+          "pass": true,
+          "detail": "near_metro=True",
+          "recovery_ms": 2.0
+        },
+        {
+          "check": "budget_refined",
+          "pass": true,
+          "detail": "budget=3500",
+          "recovery_ms": 2.0
+        },
+        {
+          "check": "context_city",
+          "pass": true,
+          "detail": "city=Delhi",
+          "recovery_ms": 2.0
+        }
+      ],
+      "final": {
+        "tool_status": "COMPLETE",
+        "tool": "search_hotels",
+        "type": "hotel",
+        "params": {
+          "city": "Delhi",
+          "budget": 3500,
+          "near_metro": true,
+          "veg_only": true
+        },
+        "stale_discarded": 0,
+        "last_interrupt_type": "REFINE"
+      }
+    },
+    {
+      "id": "T25",
+      "type": "EDGE",
+      "description": "Interrupt before tool starts",
+      "expected": "Graceful handling, no crash",
+      "result": "PASS",
+      "passed": true,
+      "error": null,
+      "recovery_latency_ms": null,
+      "duration_ms": 2.8,
+      "steps": [
+        {
+          "text": "forget it",
+          "expect_interrupt": "CANCEL",
+          "interrupt_type": "CANCEL",
+          "turn_id": 1,
+          "active_request_id": null,
+          "latency_ms": 1.2
+        }
+      ],
+      "checks": [
+        {
+          "check": "no_crash",
+          "pass": true,
+          "detail": "handled",
+          "recovery_ms": null
+        }
+      ],
+      "final": {
+        "tool_status": "CANCELLED",
+        "tool": null,
+        "type": null,
+        "params": null,
+        "stale_discarded": 0,
+        "last_interrupt_type": "CANCEL"
+      }
+    }
+  ]
+}
