@@ -27,6 +27,7 @@ class MessageResponse(BaseModel):
     active_request_id: Optional[str] = None
     transcript: Optional[str] = None
     reply_lang: Optional[str] = None
+    fact_summary: Optional[str] = None
 
 
 class StatusResponse(BaseModel):
