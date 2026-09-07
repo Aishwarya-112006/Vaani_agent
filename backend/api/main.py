@@ -34,6 +34,7 @@ from tools.ipinfo import (
 )
 from tools.hotel_search import parse_hotel_params, search_hotels
 from tools.restaurant_search import parse_restaurant_params, search_restaurants
+from tools.wikipedia import fetch_wiki_summary
 
 
 # Structured JSON logger
@@ -272,6 +273,8 @@ def _classify_interrupt(text: str, state: ConversationState) -> Optional[str]:
     s = (text or "").lower()
     if re.search(r"what are you|are you still|how long|status", s):
         return "STATUS"
+    if re.search(r"what is|tell me about|who is|kya hai|kya hota|batao", s):
+        return "FACT"
     if re.search(r"forget it|never mind|stop searching|cancel|stop it", s):
         return "CANCEL"
     task_type = str(state.current_task.get("type", ""))
@@ -390,6 +393,27 @@ async def handle_message(
         state.reply_lang = detect_reply_lang(text, getattr(state, "reply_lang", None))
 
     classified = interrupt_type or _classify_interrupt(text or "", state)
+
+    # FACT: answer side question without cancelling tool
+    if classified == "FACT":
+        reply_lang = getattr(state, "reply_lang", "en") or "en"
+        import re as _re
+        query = (text or "").strip()
+        query = _re.sub(r"(?i)^(what is|tell me about|who is|kya hai|kya hota|batao)\s+", "", query)
+        query = _re.sub(r"(?i)^the\s+", "", query).strip()
+        fact_summary = await fetch_wiki_summary(query, reply_lang)
+        state.last_interrupt_type = "FACT"
+        log_event("interrupt_fact", session_id=session_id, turn_id=state.turn_id)
+        await manager.broadcast_state(session_id, state)
+        return MessageResponse(
+            status="ok",
+            turn_id=state.turn_id,
+            interrupt_type="FACT",
+            active_request_id=state.active_request_id,
+            transcript=transcript or text,
+            reply_lang=reply_lang,
+            fact_summary=fact_summary,
+        )
 
     # STATUS: answer without fencing / without starting a new tool
     if classified == "STATUS":
