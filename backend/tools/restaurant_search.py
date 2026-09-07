@@ -121,7 +121,12 @@ _CITIES = [
 ]
 
 
-def parse_restaurant_params(text: str, previous: Optional[dict] = None) -> dict[str, Any]:
+def parse_restaurant_params(
+    text: str,
+    previous: Optional[dict] = None,
+    *,
+    default_city: str = "Delhi",
+) -> dict[str, Any]:
     """Extract restaurant search params from free text, merging with previous if present."""
     prev = dict(previous or {})
     # Drop hotel-only keys when pivoting
@@ -161,7 +166,7 @@ def parse_restaurant_params(text: str, previous: Optional[dict] = None) -> dict[
         veg_only = False
 
     return {
-        "city": city or prev.get("city") or "Delhi",
+        "city": city or prev.get("city") or default_city or "Delhi",
         "cuisine": cuisine or prev.get("cuisine") or "Indian",
         "veg_only": bool(veg_only),
         "area": area or prev.get("area") or "Connaught Place",

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpRight, Radio, Zap } from "lucide-react";
 
-import { createSession, sendTextMessage } from "@/lib/api";
+import { createSession, sendTextMessage, setSessionCity } from "@/lib/api";
 import { unlockAudio } from "@/lib/audio";
 import {
   ackCancel,
@@ -10,9 +10,12 @@ import {
   ackRefine,
   ackSearch,
   ackStatus,
+  CITY_CHIPS,
+  confirmCity,
   errNetwork,
   errSttEmpty,
   errTts,
+  greetCity,
   phaseLabel,
   resultHotels,
   resultRestaurants,
@@ -135,7 +138,7 @@ function resolveTaskType(text: string, previous?: Task | null): Task["type"] {
   return "hotel";
 }
 
-function parseTask(text: string, previous?: Task | null): Task {
+function parseTask(text: string, previous?: Task | null, defaultCity = "Delhi"): Task {
   const s = text.toLowerCase();
   const type = resolveTaskType(text, previous);
   const city = [
@@ -195,11 +198,17 @@ function parseTask(text: string, previous?: Task | null): Task {
     if (prevCity && !merged.some((x) => x.startsWith("city="))) merged.unshift(prevCity);
   }
 
+  if (!merged.some((x) => x.startsWith("city="))) {
+    merged.unshift(`city=${defaultCity}`);
+  }
+
   return {
     type,
     params:
       merged.join(" · ") ||
-      (type === "hotel" ? "city=Delhi" : "city=Delhi · area=Connaught Place · cuisine=Indian"),
+      (type === "hotel"
+        ? `city=${defaultCity}`
+        : `city=${defaultCity} · area=Connaught Place · cuisine=Indian`),
     tool_call_id: Math.random().toString(16).slice(2, 10),
   };
 }
@@ -222,6 +231,13 @@ export function VoiceAgent() {
   const [phaseDetail, setPhaseDetail] = useState<string | undefined>();
   const [bannerError, setBannerError] = useState<string | null>(null);
   const [replyLang, setReplyLang] = useState<ReplyLang>("en");
+  const [preferredCity, setPreferredCity] = useState("Delhi");
+  const [cityPrompt, setCityPrompt] = useState<{
+    open: boolean;
+    changing: boolean;
+    greeting: string;
+    isLocal: boolean;
+  }>({ open: false, changing: false, greeting: "", isLocal: true });
 
   // Real-time backend state via WebSocket
   const { state: wsState, connected: wsConnected } = useWebSocket(mounted ? session : null);
@@ -235,6 +251,7 @@ export function VoiceAgent() {
   const spokenRequestRef = useRef<string | null>(null);
   const taskRef = useRef<Task | null>(null);
   const replyLangRef = useRef<ReplyLang>("en");
+  const preferredCityRef = useRef("Delhi");
 
   const setLang = useCallback((next: ReplyLang) => {
     replyLangRef.current = next;
@@ -274,6 +291,27 @@ export function VoiceAgent() {
     (kind: Log["kind"], text: string) =>
       setLogs((x) => [{ kind, text: `${now()}  ${text}` }, ...x].slice(0, 28)),
     [],
+  );
+
+  const applyCity = useCallback(
+    (city: string, opts?: { speak?: boolean }) => {
+      const name = city.trim() || "Delhi";
+      preferredCityRef.current = name;
+      setPreferredCity(name);
+      setCityPrompt((p) => ({ ...p, open: false, changing: false }));
+      if (session && session !== "pending") {
+        void setSessionCity(session, name).catch(() => {
+          /* local preferred city still works */
+        });
+      }
+      const line = confirmCity(name, replyLangRef.current);
+      if (opts?.speak !== false) {
+        setTurns((x) => [...x, { role: "assistant", text: line, time: now() }]);
+        void speakLine(line, {}, replyLangRef.current);
+      }
+      pushLog("turn", `CITY · ${name}`);
+    },
+    [pushLog, session],
   );
 
   const setPipeline = useCallback((next: PipelinePhase, detail?: string) => {
@@ -476,7 +514,7 @@ export function VoiceAgent() {
         return;
       }
 
-      const next = parseTask(text, status === "RUNNING" ? task : null);
+      const next = parseTask(text, status === "RUNNING" ? task : null, preferredCityRef.current);
       currentTurn.current += 1;
       const n = currentTurn.current;
       setTurnId(n);
@@ -559,7 +597,21 @@ export function VoiceAgent() {
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           const created = await createSession();
-          if (!cancelled) setSession(created.session_id);
+          if (cancelled) return;
+          setSession(created.session_id);
+          const city = (created.detected_city || "Delhi").trim() || "Delhi";
+          preferredCityRef.current = city;
+          setPreferredCity(city);
+          const greeting =
+            created.greeting?.trim() || greetCity(city, replyLangRef.current);
+          setCityPrompt({
+            open: true,
+            changing: false,
+            greeting,
+            isLocal: Boolean(created.is_local),
+          });
+          setTurns((x) => [...x, { role: "assistant", text: greeting, time: now() }]);
+          void speakLine(greeting, {}, replyLangRef.current);
           return;
         } catch {
           await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
@@ -686,6 +738,80 @@ export function VoiceAgent() {
             </div>
           ) : null}
 
+          {cityPrompt.open ? (
+            <div className="mt-3 rounded-xl border border-primary/25 bg-primary/5 px-3 py-3 text-left">
+              <p className="text-sm font-medium">{cityPrompt.greeting}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Near <span className="font-semibold text-foreground">{preferredCity}</span>
+                {cityPrompt.isLocal ? " · localhost/VPN may be wrong — change freely" : ""}
+              </p>
+              {!cityPrompt.changing ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+                    onClick={() => {
+                      void unlockAudio();
+                      applyCity(preferredCity);
+                    }}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-border bg-background/70 px-3 py-1.5 text-xs font-medium"
+                    onClick={() => {
+                      void unlockAudio();
+                      setCityPrompt((p) => ({ ...p, changing: true }));
+                    }}
+                  >
+                    Change city
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {CITY_CHIPS.map((city) => (
+                    <button
+                      key={city}
+                      type="button"
+                      className={`rounded-lg border px-2.5 py-1 text-xs ${
+                        city === preferredCity
+                          ? "border-primary/40 bg-primary/15 font-semibold"
+                          : "border-border bg-background/70"
+                      }`}
+                      onClick={() => {
+                        void unlockAudio();
+                        applyCity(city);
+                      }}
+                    >
+                      {city}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="mt-3 text-center text-[11px] text-muted-foreground">
+              Searching near <span className="font-medium text-foreground">{preferredCity}</span>
+              {" · "}
+              <button
+                type="button"
+                className="underline-offset-2 hover:underline"
+                onClick={() => {
+                  void unlockAudio();
+                  setCityPrompt({
+                    open: true,
+                    changing: true,
+                    greeting: greetCity(preferredCity, replyLang),
+                    isLocal: false,
+                  });
+                }}
+              >
+                change city
+              </button>
+            </p>
+          )}
+
           <div className="mt-6 flex flex-col items-center border-t border-border pt-6">
             <PushToTalk
               sessionId={session}
@@ -738,7 +864,11 @@ export function VoiceAgent() {
                   return;
                 }
 
-                const next = parseTask(spoken, status === "RUNNING" ? task : null);
+                const next = parseTask(
+                  spoken,
+                  status === "RUNNING" ? task : null,
+                  preferredCityRef.current,
+                );
                 const kind = type || (status === "RUNNING" ? "REFINE" : null);
                 if (status === "RUNNING") {
                   pushLog("interrupt", `${kind || "REFINE"} · old task fenced`);

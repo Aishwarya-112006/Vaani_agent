@@ -1,21 +1,180 @@
 [
   {
+    "scenario_id": "T12",
+    "timestamp": 1788813755.8772023,
+    "passed": true,
+    "interrupt_type": "CANCEL",
+    "note": "backend speaks nothing on CANCEL (no Rime call in this route yet)"
+  },
+  {
+    "scenario_id": "T13",
+    "timestamp": 1788813758.5446672,
+    "passed": true,
+    "interrupt_type": "CANCEL",
+    "note": "backend speaks nothing on CANCEL (no Rime call in this route yet)"
+  },
+  {
+    "scenario_id": "T14",
+    "timestamp": 1788813761.1952686,
+    "passed": true,
+    "interrupt_type": "CANCEL",
+    "note": "backend speaks nothing on CANCEL (no Rime call in this route yet)"
+  },
+  {
+    "scenario_id": "CANCEL-EXTRA-1",
+    "timestamp": 1788813763.9101326,
+    "passed": true,
+    "interrupt_type": "CANCEL",
+    "note": "backend speaks nothing on CANCEL (no Rime call in this route yet)"
+  },
+  {
+    "scenario_id": "CANCEL-EXTRA-2",
+    "timestamp": 1788813766.9739614,
+    "passed": true,
+    "interrupt_type": "CANCEL",
+    "note": "chained REFINE->CANCEL: verifies fencing survives two interrupts in a row"
+  },
+  {
+    "scenario_id": "T24",
+    "timestamp": 1788813770.4835496,
+    "passed": true,
+    "interrupt_type": "MULTI",
+    "final_params": {
+      "city": "Delhi",
+      "budget": 5000,
+      "near_metro": true,
+      "veg_only": true
+    }
+  },
+  {
+    "scenario_id": "T25",
+    "timestamp": 1788813773.3956852,
+    "passed": true,
+    "interrupt_type": "EDGE",
+    "final_status": "COMPLETE"
+  },
+  {
+    "scenario_id": "T01",
+    "timestamp": 1788813776.288594,
+    "passed": true,
+    "latency_ms": 2344.0000000009604
+  },
+  {
+    "scenario_id": "T02",
+    "timestamp": 1788813779.43574,
+    "passed": true,
+    "note": "restaurant tool routed correctly"
+  },
+  {
+    "scenario_id": "T03",
+    "timestamp": 1788813784.066162,
+    "passed": true,
+    "note": "tool selection via /message regex routing (pipeline.classify_intent still unwired)"
+  },
+  {
+    "scenario_id": "T18",
+    "timestamp": 1788813784.7539246,
+    "passed": true,
+    "note": "PIVOT \u2192 search_restaurants"
+  },
+  {
+    "scenario_id": "T19",
+    "timestamp": 1788813785.4721155,
+    "passed": true,
+    "note": "PIVOT \u2192 search_hotels"
+  },
+  {
+    "scenario_id": "T20",
+    "timestamp": 1788813786.1133442,
+    "passed": true,
+    "note": "PIVOT \u2192 search_restaurants"
+  },
+  {
+    "scenario_id": "T04",
+    "timestamp": 1788813786.7844765,
+    "passed": true,
+    "interrupt_type": "REFINE"
+  },
+  {
+    "scenario_id": "T05",
+    "timestamp": 1788813787.4238114,
+    "passed": true,
+    "interrupt_type": "REFINE"
+  },
+  {
+    "scenario_id": "T06",
+    "timestamp": 1788813788.0686238,
+    "passed": true,
+    "interrupt_type": "REFINE"
+  },
+  {
+    "scenario_id": "T07",
+    "timestamp": 1788813788.7103848,
+    "passed": true,
+    "interrupt_type": "REFINE"
+  },
+  {
+    "scenario_id": "T08",
+    "timestamp": 1788813789.3698816,
+    "passed": true,
+    "interrupt_type": "REFINE"
+  },
+  {
+    "scenario_id": "T09",
+    "timestamp": 1788813790.0105586,
+    "passed": true,
+    "interrupt_type": "REFINE"
+  },
+  {
+    "scenario_id": "T10",
+    "timestamp": 1788813790.6688244,
+    "passed": true,
+    "interrupt_type": "REFINE"
+  },
+  {
+    "scenario_id": "T11",
+    "timestamp": 1788813791.3141124,
+    "passed": true,
+    "interrupt_type": "REFINE"
+  },
+  {
     "scenario_id": "T21",
-    "timestamp": 1788811257.4578283,
+    "timestamp": 1788813795.267329,
     "passed": true,
     "note": "stale_discarded=0 (0 is fine if cancellation beat completion)"
   },
   {
     "scenario_id": "T22",
-    "timestamp": 1788811259.9765215,
+    "timestamp": 1788813798.2860665,
     "passed": true,
     "stale_discarded": 0
   },
   {
     "scenario_id": "T23",
-    "timestamp": 1788811264.1640687,
+    "timestamp": 1788813804.3815365,
     "passed": true,
     "stale_discarded": 0,
     "note": "race-condition test -- see docstring for interpretation"
+  },
+  {
+    "scenario_id": "T15",
+    "timestamp": 1788813808.2086127,
+    "passed": true,
+    "interrupt_type": "STATUS",
+    "note": "backend speaks nothing on STATUS (no Rime call in this route yet)"
+  },
+  {
+    "scenario_id": "T16",
+    "timestamp": 1788813811.9583087,
+    "passed": true,
+    "interrupt_type": "STATUS",
+    "note": "backend speaks nothing on STATUS (no Rime call in this route yet)"
+  },
+  {
+    "scenario_id": "T17",
+    "timestamp": 1788813814.8881087,
+    "passed": true,
+    "interrupt_type": "STATUS",
+    "note": "backend speaks nothing on STATUS (no Rime call in this route yet)"
   }
 ]

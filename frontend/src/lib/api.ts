@@ -2,6 +2,10 @@ export const API_BASE = import.meta.env["VITE_API_URL"] ?? "http://localhost:800
 
 export type SessionResponse = {
   session_id: string;
+  detected_city?: string;
+  greeting?: string;
+  city_source?: string;
+  is_local?: boolean;
 };
 
 export type MessageResponse = {
@@ -19,6 +23,26 @@ export async function createSession(): Promise<SessionResponse> {
     throw new Error(`Failed to create session (${response.status})`);
   }
   return (await response.json()) as SessionResponse;
+}
+
+export async function setSessionCity(
+  sessionId: string,
+  city: string,
+): Promise<{ session_id: string; preferred_city: string; greeting: string }> {
+  const response = await fetch(`${API_BASE}/session/${sessionId}/city`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ city }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || `Failed to set city (${response.status})`);
+  }
+  return (await response.json()) as {
+    session_id: string;
+    preferred_city: string;
+    greeting: string;
+  };
 }
 
 export async function sendTextMessage(

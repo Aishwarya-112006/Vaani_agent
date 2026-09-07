@@ -171,3 +171,27 @@ export function errTts(): string {
 export function voiceBridge(lang: ReplyLang = "en"): string {
   return lang === "hi" ? "Ek second…" : "One second…";
 }
+
+export function greetCity(city: string, lang: ReplyLang = "en"): string {
+  const name = city.trim() || "Delhi";
+  return lang === "hi" ? `Namaste! ${name} ke paas search karein?` : `Hi! Searching near ${name}?`;
+}
+
+export function confirmCity(city: string, lang: ReplyLang = "en"): string {
+  const name = city.trim() || "Delhi";
+  return lang === "hi"
+    ? `Theek hai — ${name} set. Hotels ya restaurants bolo.`
+    : `Got it — searching near ${name}. Ask for hotels or restaurants.`;
+}
+
+export const CITY_CHIPS = [
+  "Delhi",
+  "Mumbai",
+  "Bangalore",
+  "Hyderabad",
+  "Chennai",
+  "Pune",
+  "Kolkata",
+  "Goa",
+  "Jaipur",
+] as const;
