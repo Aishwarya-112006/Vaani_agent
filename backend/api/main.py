@@ -22,6 +22,8 @@ from agent.language import detect_reply_lang
 from tools.hotel_search import parse_hotel_params, search_hotels
 from tools.restaurant_search import parse_restaurant_params, search_restaurants
 
+from fastapi import Request
+from tools.ipinfo import resolve_city
 
 # Structured JSON logger
 class JSONFormatter(logging.Formatter):
@@ -267,11 +269,23 @@ def _classify_interrupt(text: str, state: ConversationState) -> Optional[str]:
 
 
 @app.post("/session", response_model=SessionResponse)
-async def create_session_route():
+async def create_session_route(request: Request):
     session_id = str(uuid.uuid4())
     create_session(session_id)
     log_event("session_created", session_id=session_id)
-    return SessionResponse(session_id=session_id)
+
+    # Resolve city from IP
+    client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "")
+    if client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+    detected_city = await resolve_city(client_ip)
+
+    greeting = f"Hi! Searching near {detected_city}?"
+    return SessionResponse(
+        session_id=session_id,
+        detected_city=detected_city,
+        greeting=greeting,
+    )
 
 
 @app.post("/message", response_model=MessageResponse)
