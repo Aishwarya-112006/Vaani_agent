@@ -19,6 +19,8 @@ class ConversationState:
     active_request_id: Optional[str] = None
     last_tool_result: Optional[dict] = None
     reply_lang: str = "en"  # 'en' | 'hi' — mirrors last clear user utterance
+    preferred_city: str = "Delhi"
+    detected_city: str = "Delhi"
 
     def to_dict(self) -> dict:
         return {
@@ -31,6 +33,8 @@ class ConversationState:
             "active_request_id": self.active_request_id,
             "last_tool_result": self.last_tool_result,
             "reply_lang": self.reply_lang,
+            "preferred_city": self.preferred_city,
+            "detected_city": self.detected_city,
         }
 
 

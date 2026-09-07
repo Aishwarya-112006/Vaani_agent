@@ -68,7 +68,12 @@ _MOCK_HOTELS = [
 ]
 
 
-def parse_hotel_params(text: str, previous: Optional[dict] = None) -> dict[str, Any]:
+def parse_hotel_params(
+    text: str,
+    previous: Optional[dict] = None,
+    *,
+    default_city: str = "Delhi",
+) -> dict[str, Any]:
     """Extract hotel search params from free text, merging with previous if present."""
     prev = dict(previous or {})
     s = (text or "").lower()
@@ -108,7 +113,7 @@ def parse_hotel_params(text: str, previous: Optional[dict] = None) -> dict[str, 
         veg_only = False
 
     return {
-        "city": city or prev.get("city") or "Delhi",
+        "city": city or prev.get("city") or default_city or "Delhi",
         "budget": budget if budget is not None else prev.get("budget", 5000),
         "near_metro": bool(near_metro),
         "veg_only": bool(veg_only),

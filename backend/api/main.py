@@ -8,37 +8,51 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from groq import RateLimitError
 from pydantic import BaseModel, Field
 
-from .models import SessionResponse, MessageResponse, StatusResponse, EvaluateResponse
+from .models import (
+    SessionResponse,
+    SessionCityRequest,
+    SessionCityResponse,
+    MessageResponse,
+    StatusResponse,
+    EvaluateResponse,
+)
 from agent.state import create_session, get_session, ConversationState
 from agent.stt import groq_transcribe
 from agent.rime import rime_speak
 from agent.language import detect_reply_lang
+from tools.ipinfo import (
+    client_ip_from_headers,
+    resolve_city_from_ip,
+    greeting_for_city,
+    DEFAULT_CITY,
+)
 from tools.hotel_search import parse_hotel_params, search_hotels
 from tools.restaurant_search import parse_restaurant_params, search_restaurants
 
-from fastapi import Request
-from tools.ipinfo import resolve_city
 
 # Structured JSON logger
 class JSONFormatter(logging.Formatter):
-    def format(self, record):
-        log_data = {
+    def format(self, record: logging.LogRecord) -> str:
+        log_data: dict = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": record.levelname,
             "message": record.getMessage(),
         }
-        if hasattr(record, "session_id"):
-            log_data["session_id"] = record.session_id
-        if hasattr(record, "turn_id"):
-            log_data["turn_id"] = record.turn_id
-        if hasattr(record, "tool_id"):
-            log_data["tool_id"] = record.tool_id
+        session_id = getattr(record, "session_id", None)
+        turn_id = getattr(record, "turn_id", None)
+        tool_id = getattr(record, "tool_id", None)
+        if session_id is not None:
+            log_data["session_id"] = session_id
+        if turn_id is not None:
+            log_data["turn_id"] = turn_id
+        if tool_id is not None:
+            log_data["tool_id"] = tool_id
         return json.dumps(log_data)
 
 
@@ -88,8 +102,13 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-def log_event(event: str, session_id: str = None, turn_id: int = None, tool_id: str = None):
-    extra = {}
+def log_event(
+    event: str,
+    session_id: Optional[str] = None,
+    turn_id: Optional[int] = None,
+    tool_id: Optional[str] = None,
+) -> None:
+    extra: dict = {}
     if session_id:
         extra["session_id"] = session_id
     if turn_id is not None:
@@ -271,21 +290,55 @@ def _classify_interrupt(text: str, state: ConversationState) -> Optional[str]:
 @app.post("/session", response_model=SessionResponse)
 async def create_session_route(request: Request):
     session_id = str(uuid.uuid4())
-    create_session(session_id)
+    state = create_session(session_id)
+
+    # Best-effort geo — never fail session creation
+    try:
+        ip = client_ip_from_headers(
+            dict(request.headers),
+            fallback=request.client.host if request.client else "127.0.0.1",
+        )
+        geo = await resolve_city_from_ip(ip)
+    except Exception:
+        geo = {
+            "city": DEFAULT_CITY,
+            "source": "fallback",
+            "ip": None,
+            "is_local": True,
+        }
+
+    city = str(geo.get("city") or DEFAULT_CITY)
+    state.detected_city = city
+    state.preferred_city = city
+    greeting = greeting_for_city(city, lang="en")
+
     log_event("session_created", session_id=session_id)
-
-    # Resolve city from IP
-    client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "")
-    if client_ip:
-        client_ip = client_ip.split(",")[0].strip()
-    detected_city = await resolve_city(client_ip)
-
-    greeting = f"Hi! Searching near {detected_city}?"
+    logger.info(
+        "session_geo city=%s source=%s local=%s",
+        city,
+        geo.get("source"),
+        geo.get("is_local"),
+    )
     return SessionResponse(
         session_id=session_id,
-        detected_city=detected_city,
+        detected_city=city,
         greeting=greeting,
+        city_source=str(geo.get("source") or "fallback"),
+        is_local=bool(geo.get("is_local")),
     )
+
+
+@app.post("/session/{session_id}/city", response_model=SessionCityResponse)
+async def set_session_city(session_id: str, body: SessionCityRequest):
+    """Override preferred city (localhost / VPN wrong guess)."""
+    state = get_session(session_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found")
+    city = (body.city or "").strip().title() or DEFAULT_CITY
+    state.preferred_city = city
+    greeting = greeting_for_city(city, lang=getattr(state, "reply_lang", "en") or "en")
+    log_event("session_city_set", session_id=session_id)
+    return SessionCityResponse(session_id=session_id, preferred_city=city, greeting=greeting)
 
 
 @app.post("/message", response_model=MessageResponse)
@@ -392,7 +445,11 @@ async def handle_message(
             if same_kind
             else ({k: prev[k] for k in ("city", "veg_only") if k in prev} if prev else None)
         )
-        tool_params = parse_restaurant_params(text or "", merge_from)
+        tool_params = parse_restaurant_params(
+            text or "",
+            merge_from,
+            default_city=getattr(state, "preferred_city", None) or DEFAULT_CITY,
+        )
         state.current_task = {
             "type": "restaurant",
             "tool": "search_restaurants",
@@ -410,7 +467,11 @@ async def handle_message(
             if same_kind
             else ({k: prev[k] for k in ("city", "veg_only") if k in prev} if prev else None)
         )
-        tool_params = parse_hotel_params(text or "", merge_from)
+        tool_params = parse_hotel_params(
+            text or "",
+            merge_from,
+            default_city=getattr(state, "preferred_city", None) or DEFAULT_CITY,
+        )
         state.current_task = {
             "type": "hotel",
             "tool": "search_hotels",
