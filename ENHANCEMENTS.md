@@ -22,13 +22,13 @@ Use this as the single checklist before demo day or the next sprint.
 **Why:** Killer opener; no credit card; easy.
 
 **What to change**
-- [ ] Add `IPINFO_TOKEN` (optional) to `backend/.env.example` — free tier often works with limited unauthenticated access; prefer token.
-- [ ] On `POST /session`, resolve client IP → city (fallback: `Delhi`).
-- [ ] Return `{ session_id, detected_city, greeting }` (or separate `GET /geo`).
-- [ ] Frontend: on session create, speak + show greeting:  
+- [x] Add `IPINFO_TOKEN` (optional) to `backend/.env.example` — free tier often works with limited unauthenticated access; prefer token.
+- [x] On `POST /session`, resolve client IP → city (fallback: `Delhi`).
+- [x] Return `{ session_id, detected_city, greeting }` (or separate `GET /geo`).
+- [x] Frontend: on session create, speak + show greeting:  
   `Hi! Searching near {city}?` with chips: **Yes** / **Change city**.
-- [ ] Handle localhost/VPN wrong city → always allow override.
-- [ ] Do **not** hard-fail session if IPInfo is down.
+- [x] Handle localhost/VPN wrong city → always allow override.
+- [x] Do **not** hard-fail session if IPInfo is down.
 
 **Files likely touched**
 - `backend/api/main.py` (`/session`)

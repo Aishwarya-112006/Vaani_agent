@@ -5,7 +5,19 @@ from typing import Optional
 class SessionResponse(BaseModel):
     session_id: str
     detected_city: str = "Delhi"
-    greeting: str = "Hi! How can I help you today?"
+    greeting: str = "Hi! Searching near Delhi?"
+    city_source: str = "fallback"  # ipinfo | fallback
+    is_local: bool = True
+
+
+class SessionCityRequest(BaseModel):
+    city: str
+
+
+class SessionCityResponse(BaseModel):
+    session_id: str
+    preferred_city: str
+    greeting: str
 
 
 class MessageResponse(BaseModel):
