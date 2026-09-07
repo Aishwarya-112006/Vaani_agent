@@ -10,6 +10,7 @@ export type MessageResponse = {
   interrupt_type?: string | null;
   active_request_id?: string | null;
   transcript?: string | null;
+  reply_lang?: string | null;
 };
 
 export async function createSession(): Promise<SessionResponse> {
@@ -61,15 +62,24 @@ export async function sendAudioMessage(sessionId: string, blob: Blob): Promise<M
   return (await response.json()) as MessageResponse;
 }
 
-export async function fetchRimeSpeech(text: string): Promise<ArrayBuffer> {
+export async function fetchRimeSpeech(
+  text: string,
+  replyLang: "en" | "hi" = "en",
+): Promise<ArrayBuffer> {
   const response = await fetch(`${API_BASE}/tts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, reply_lang: replyLang }),
   });
 
   if (!response.ok) {
-    const detail = await response.text();
+    let detail = await response.text();
+    try {
+      const parsed = JSON.parse(detail) as { detail?: string };
+      if (parsed?.detail) detail = parsed.detail;
+    } catch {
+      /* keep raw text */
+    }
     throw new Error(detail || `TTS failed (${response.status})`);
   }
 

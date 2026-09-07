@@ -42,7 +42,7 @@ async def test_t21_stale_result_blocked_on_refine(client, session_id, results_re
     assert second.status_code == 200, second.text
 
     # Let both the (cancelled) first tool and the new second tool resolve.
-    # Poll instead of a fixed sleep -- artificial delay now runs ~3.5-4s.
+    # Poll instead of a fixed sleep -- artificial delay now runs ~2.0-2.8s.
     status = await wait_for_status(client, session_id, {"COMPLETE"}, timeout=12.0)
 
     # The invariant that actually matters: the FINAL spoken/accepted result
@@ -80,15 +80,15 @@ async def test_t23_stale_fence_direct_race(client, session_id, results_recorder)
     flaky on a real backend (unlike a mock with controllable timing) -- if
     it's consistently 0, that itself is useful evidence that cancellation is
     fast and reliable, which is a GOOD sign, just report it honestly rather
-    than forcing a specific number. The exact race window (2.8s) is tuned
-    below the shortest artificial delay observed (~3.0s) so the tool is
+    than forcing a specific number. The exact race window (1.6s) is tuned
+    below the shortest artificial delay (~2.0s) so the tool is
     reliably still RUNNING when we interrupt, without being so early that
     we're not actually testing anything near the completion boundary.
     """
     first = await send_text(client, session_id, "Search hotels in Bangalore")
     assert first.status_code == 200, first.text
 
-    await asyncio.sleep(2.8)
+    await asyncio.sleep(1.6)
     second = await send_text(client, session_id, "Near the airport instead")
     assert second.status_code == 200, second.text
 

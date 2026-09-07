@@ -1,6 +1,6 @@
 """Interruptible mock hotel search tool.
 
-`search_hotels` sleeps 3–4 seconds (cancellable via asyncio task cancel),
+`search_hotels` sleeps ~2–2.8 seconds (cancellable via asyncio task cancel),
 then returns structured mock results. Cancellation raises CancelledError
 so callers can treat the delay as interruptible.
 """
@@ -15,9 +15,9 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-# Artificial latency window (seconds)
-MIN_DELAY = 3.0
-MAX_DELAY = 4.0
+# Artificial latency window (seconds) — short enough for demo UX, still interruptible
+MIN_DELAY = 2.0
+MAX_DELAY = 2.8
 
 _MOCK_HOTELS = [
     {
@@ -93,15 +93,18 @@ def parse_hotel_params(text: str, previous: Optional[dict] = None) -> dict[str, 
     budget = int(budget_match.group(1)) if budget_match else None
 
     near_metro = prev.get("near_metro", False)
-    if re.search(r"near\s+(a\s+|the\s+)?metro|metro\s+station", s):
+    if re.search(
+        r"near\s+(a\s+|the\s+)?metro|metro\s+station|metro\s+ke\s+paas|metro\s+paas",
+        s,
+    ):
         near_metro = True
-    if re.search(r"not\s+near\s+metro|anywhere", s):
+    if re.search(r"not\s+near\s+metro|anywhere|kahin\s+bhi", s):
         near_metro = False
 
     veg_only = prev.get("veg_only", False)
-    if re.search(r"\bveg(?:etarian)?\b|veg[- ]?only|veg[- ]?friendly", s):
+    if re.search(r"\bveg(?:etarian)?\b|veg[- ]?only|veg[- ]?friendly|shakahari", s):
         veg_only = True
-    if re.search(r"non[- ]?veg|any food", s):
+    if re.search(r"non[- ]?veg|any food|nonveg", s):
         veg_only = False
 
     return {
@@ -112,6 +115,31 @@ def parse_hotel_params(text: str, previous: Optional[dict] = None) -> dict[str, 
     }
 
 
+def _format_hotel_summary(
+    top: list[dict],
+    city_name: str,
+    cap: int,
+    near_metro: bool,
+    veg_only: bool,
+    *,
+    lang: str = "en",
+) -> str:
+    """Short spoken summary (keeps Rime TTS snappy). Budget is INR, not meters."""
+    picks = ", ".join(f"{h['name']} {h['price_inr']}" for h in top)
+    metro = " near metro" if near_metro else ""
+    veg = ", veg" if veg_only else ""
+
+    if lang == "hi":
+        return (
+            f"{city_name}, {cap} ke under{metro}{veg} — {len(top)} hotels. "
+            f"{picks}."
+        )
+    return (
+        f"{city_name}, under {cap}{metro}{veg} — {len(top)} hotels. "
+        f"{picks}."
+    )
+
+
 async def search_hotels(
     city: str,
     budget: int | float | None = 5000,
@@ -119,6 +147,7 @@ async def search_hotels(
     veg_only: bool = False,
     *,
     delay: float | None = None,
+    reply_lang: str = "en",
 ) -> dict[str, Any]:
     """Search mock hotels after an interruptible artificial delay.
 
@@ -131,12 +160,13 @@ async def search_hotels(
     wait = delay if delay is not None else random.uniform(MIN_DELAY, MAX_DELAY)
 
     logger.info(
-        "search_hotels start city=%s budget=%s near_metro=%s veg_only=%s delay=%.2fs",
+        "search_hotels start city=%s budget=%s near_metro=%s veg_only=%s delay=%.2fs lang=%s",
         city_name,
         cap,
         near_metro,
         veg_only,
         wait,
+        reply_lang,
     )
 
     # Interruptible delay — task.cancel() wakes this with CancelledError
@@ -191,12 +221,10 @@ async def search_hotels(
         },
         "count": len(top),
         "results": top,
-        "summary": (
-            f"Found {len(top)} hotels in {city_name} under ₹{cap}"
-            + (" near metro" if near_metro else "")
-            + (" (veg-friendly)" if veg_only else "")
-            + f". Top pick: {top[0]['name']}."
+        "summary": _format_hotel_summary(
+            top, city_name, cap, near_metro, veg_only, lang=reply_lang
         ),
+        "reply_lang": reply_lang,
         "delay_seconds": round(wait, 2),
     }
 
