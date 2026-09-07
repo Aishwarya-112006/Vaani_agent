@@ -93,7 +93,7 @@ def parse_hotel_params(text: str, previous: Optional[dict] = None) -> dict[str, 
     budget = int(budget_match.group(1)) if budget_match else None
 
     near_metro = prev.get("near_metro", False)
-    if re.search(r"near\s+(a\s+)?metro|metro\s+station", s):
+    if re.search(r"near\s+(a\s+|the\s+)?metro|metro\s+station", s):
         near_metro = True
     if re.search(r"not\s+near\s+metro|anywhere", s):
         near_metro = False
