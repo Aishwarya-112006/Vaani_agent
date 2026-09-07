@@ -16,8 +16,8 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 # Artificial latency window (seconds) — same as search_hotels
-MIN_DELAY = 3.0
-MAX_DELAY = 4.0
+MIN_DELAY = 2.0
+MAX_DELAY = 2.8
 
 _MOCK_RESTAURANTS = [
     {
@@ -175,6 +175,7 @@ async def search_restaurants(
     area: str | None = "Connaught Place",
     *,
     delay: float | None = None,
+    reply_lang: str = "en",
 ) -> dict[str, Any]:
     """Search mock restaurants after an interruptible artificial delay.
 
@@ -188,12 +189,13 @@ async def search_restaurants(
     wait = delay if delay is not None else random.uniform(MIN_DELAY, MAX_DELAY)
 
     logger.info(
-        "search_restaurants start city=%s cuisine=%s veg_only=%s area=%s delay=%.2fs",
+        "search_restaurants start city=%s cuisine=%s veg_only=%s area=%s delay=%.2fs lang=%s",
         city_name,
         cuisine_name,
         veg_only,
         area_name,
         wait,
+        reply_lang,
     )
 
     # Interruptible delay — task.cancel() wakes this with CancelledError
@@ -253,6 +255,22 @@ async def search_restaurants(
 
     top = [{k: v for k, v in r.items() if not k.startswith("_")} for r in results[:3]]
 
+    picks = ", ".join(f"{h['name']}" for h in top)
+    if reply_lang == "hi":
+        summary = (
+            f"{area_name}, {city_name} — {len(top)} restaurants"
+            + (f", {cuisine_name}" if cuisine_name else "")
+            + (" · veg" if veg_only else "")
+            + f". {picks}."
+        )
+    else:
+        summary = (
+            f"{area_name}, {city_name} — {len(top)} restaurants"
+            + (f", {cuisine_name}" if cuisine_name else "")
+            + (" · veg" if veg_only else "")
+            + f". {picks}."
+        )
+
     payload = {
         "tool": "search_restaurants",
         "params": {
@@ -263,12 +281,8 @@ async def search_restaurants(
         },
         "count": len(top),
         "results": top,
-        "summary": (
-            f"Found {len(top)} restaurants in {area_name}, {city_name}"
-            + (f" ({cuisine_name})" if cuisine_name else "")
-            + (" · veg only" if veg_only else "")
-            + f". Top pick: {top[0]['name']}."
-        ),
+        "summary": summary,
+        "reply_lang": reply_lang,
         "delay_seconds": round(wait, 2),
     }
 

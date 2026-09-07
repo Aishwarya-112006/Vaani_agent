@@ -8,6 +8,7 @@ export type ToolResult = {
   results?: unknown[];
   params?: Record<string, unknown>;
   delay_seconds?: number;
+  reply_lang?: string;
 };
 
 export type AgentState = {

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Mic, WandSparkles } from "lucide-react";
+import { Mic, Square, WandSparkles } from "lucide-react";
 
 import { sendAudioMessage, type MessageResponse } from "@/lib/api";
 import { unlockAudio } from "@/lib/audio";
+import { errShortClip } from "@/lib/copy";
 
 const MIME_CANDIDATES = [
   "audio/webm;codecs=opus",
@@ -11,6 +12,10 @@ const MIME_CANDIDATES = [
   "audio/mp4",
   "audio/ogg;codecs=opus",
 ];
+
+const MIN_MS = 800;
+const MAX_MS = 8000;
+const MIN_BLOB_BYTES = 400;
 
 function pickMimeType() {
   if (typeof MediaRecorder === "undefined") return "";
@@ -28,6 +33,15 @@ type PushToTalkProps = {
   onError?: (message: string) => void;
 };
 
+/**
+ * Click-to-toggle mic:
+ * 1st click → start recording
+ * 2nd click → stop & send (after at least ~0.8s)
+ * Auto-stops at 8s.
+ *
+ * Each recording gets a session id so a late MediaRecorder.onstop cannot
+ * stop a newer mic stream or send the wrong/empty blob.
+ */
 export function PushToTalk({
   sessionId,
   disabled = false,
@@ -38,65 +52,164 @@ export function PushToTalk({
 }: PushToTalkProps) {
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [arming, setArming] = useState(false);
 
   const recordingRef = useRef(false);
+  const startingRef = useRef(false);
+  const stoppingRef = useRef(false);
+  const busyRef = useRef(false);
+  const disabledRef = useRef(disabled);
+  const armingRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<BlobPart[]>([]);
+  const startedAtRef = useRef(0);
+  const maxTimerRef = useRef<number | null>(null);
+  const minTimerRef = useRef<number | null>(null);
+  const recSessionRef = useRef(0);
+  const sessionIdRef = useRef(sessionId);
+  const onRecordingChangeRef = useRef(onRecordingChange);
+  const onBusyChangeRef = useRef(onBusyChange);
+  const onSentRef = useRef(onSent);
+  const onErrorRef = useRef(onError);
 
-  const setIsRecording = useCallback(
-    (next: boolean) => {
-      recordingRef.current = next;
-      setRecording(next);
-      onRecordingChange?.(next);
-    },
-    [onRecordingChange],
-  );
+  sessionIdRef.current = sessionId;
+  disabledRef.current = disabled;
+  onRecordingChangeRef.current = onRecordingChange;
+  onBusyChangeRef.current = onBusyChange;
+  onSentRef.current = onSent;
+  onErrorRef.current = onError;
 
-  const cleanupStream = useCallback(() => {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
+  const setIsRecording = useCallback((next: boolean) => {
+    recordingRef.current = next;
+    setRecording(next);
+    onRecordingChangeRef.current?.(next);
   }, []);
 
-  const flushAndSend = useCallback(
-    async (mimeType: string) => {
-      const blob = new Blob(chunksRef.current, { type: mimeType || "audio/webm" });
-      chunksRef.current = [];
+  const clearTimers = useCallback(() => {
+    if (maxTimerRef.current != null) {
+      window.clearTimeout(maxTimerRef.current);
+      maxTimerRef.current = null;
+    }
+    if (minTimerRef.current != null) {
+      window.clearTimeout(minTimerRef.current);
+      minTimerRef.current = null;
+    }
+  }, []);
 
-      if (blob.size < 256) {
-        onError?.("Recording was too short. Hold the button and speak, then release.");
+  const flushAndSend = useCallback(async (parts: BlobPart[], mimeType: string) => {
+    const blob = new Blob(parts, { type: mimeType || "audio/webm" });
+
+    if (blob.size < MIN_BLOB_BYTES) {
+      onErrorRef.current?.(errShortClip());
+      return;
+    }
+
+    busyRef.current = true;
+    setBusy(true);
+    onBusyChangeRef.current?.(true);
+    try {
+      const result = await sendAudioMessage(sessionIdRef.current, blob);
+      onSentRef.current?.({ ...result, bytes: blob.size });
+    } catch (error) {
+      onErrorRef.current?.(
+        error instanceof Error ? error.message : "Failed to send audio to /message",
+      );
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+      onBusyChangeRef.current?.(false);
+    }
+  }, []);
+
+  const stopRecording = useCallback(
+    (opts?: { force?: boolean }) => {
+      if (stoppingRef.current) return;
+      if (!recordingRef.current && !recorderRef.current) return;
+
+      const held = Date.now() - startedAtRef.current;
+      if (!opts?.force && held < MIN_MS) {
+        clearTimers();
+        minTimerRef.current = window.setTimeout(
+          () => stopRecording({ force: true }),
+          MIN_MS - held,
+        );
         return;
       }
 
-      setBusy(true);
-      onBusyChange?.(true);
-      onRecordingChange?.(false); // clear recording UI the moment upload starts
-      try {
-        const result = await sendAudioMessage(sessionId, blob);
-        onSent?.({ ...result, bytes: blob.size });
-      } catch (error) {
-        onError?.(error instanceof Error ? error.message : "Failed to send audio to /message");
-      } finally {
-        setBusy(false);
-        onBusyChange?.(false);
+      clearTimers();
+      const recorder = recorderRef.current;
+      stoppingRef.current = true;
+      setIsRecording(false);
+
+      if (!recorder) {
+        stoppingRef.current = false;
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
+        return;
       }
+
+      try {
+        if (recorder.state === "recording") {
+          recorder.requestData();
+          recorder.stop();
+        } else if (recorder.state !== "inactive") {
+          recorder.stop();
+        } else {
+          // Already inactive — onstop may not fire; finalize here only if still current
+          stoppingRef.current = false;
+        }
+      } catch {
+        stoppingRef.current = false;
+      }
+      recorderRef.current = null;
     },
-    [onBusyChange, onError, onRecordingChange, onSent, sessionId],
+    [clearTimers, setIsRecording],
   );
 
   const startRecording = useCallback(async () => {
-    if (disabled || busy || recordingRef.current) return;
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      onError?.("Microphone access is not available in this browser.");
-      return;
-    }
-    if (typeof MediaRecorder === "undefined") {
-      onError?.("MediaRecorder is not supported in this browser.");
+    if (
+      disabledRef.current ||
+      busyRef.current ||
+      recordingRef.current ||
+      startingRef.current ||
+      stoppingRef.current
+    ) {
       return;
     }
 
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      onErrorRef.current?.("Microphone access is not available in this browser.");
+      return;
+    }
+    if (typeof MediaRecorder === "undefined") {
+      onErrorRef.current?.("MediaRecorder is not supported in this browser.");
+      return;
+    }
+
+    startingRef.current = true;
+    armingRef.current = true;
+    setArming(true);
+
+    const recSession = ++recSessionRef.current;
+    const localChunks: BlobPart[] = [];
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          channelCount: 1,
+        },
+      });
+
+      // Aborted / superseded while permission dialog was open
+      if (!startingRef.current || recSession !== recSessionRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
       streamRef.current = stream;
 
       const mimeType = pickMimeType();
@@ -104,78 +217,117 @@ export function PushToTalk({
         ? new MediaRecorder(stream, { mimeType })
         : new MediaRecorder(stream);
 
-      chunksRef.current = [];
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chunksRef.current.push(event.data);
+        if (recSession !== recSessionRef.current) return;
+        if (event.data?.size > 0) localChunks.push(event.data);
+      };
+      recorder.onerror = () => {
+        if (recSession !== recSessionRef.current) return;
+        onErrorRef.current?.("Microphone recording failed. Try again.");
+        clearTimers();
+        stream.getTracks().forEach((track) => track.stop());
+        if (streamRef.current === stream) streamRef.current = null;
+        setIsRecording(false);
+        armingRef.current = false;
+        setArming(false);
+        startingRef.current = false;
+        stoppingRef.current = false;
+        recorderRef.current = null;
       };
       recorder.onstop = () => {
-        void flushAndSend(recorder.mimeType);
+        // Always stop THIS session's tracks (never touch a newer stream)
+        stream.getTracks().forEach((track) => track.stop());
+        if (streamRef.current === stream) streamRef.current = null;
+
+        const shouldSend = recSession === recSessionRef.current;
+        stoppingRef.current = false;
+
+        if (!shouldSend) return;
+        void flushAndSend(localChunks, recorder.mimeType || mimeType || "audio/webm");
       };
 
       recorderRef.current = recorder;
-      recorder.start();
+      recorder.start(250);
+      startedAtRef.current = Date.now();
+      startingRef.current = false;
+      armingRef.current = false;
+      setArming(false);
       setIsRecording(true);
+
+      clearTimers();
+      maxTimerRef.current = window.setTimeout(() => stopRecording({ force: true }), MAX_MS);
     } catch (error) {
-      cleanupStream();
-      onError?.(error instanceof Error ? error.message : "Could not start the microphone.");
+      startingRef.current = false;
+      armingRef.current = false;
+      setArming(false);
+      stoppingRef.current = false;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+      const msg = error instanceof Error ? error.message : "Could not start the microphone.";
+      if (/NotAllowedError|Permission denied/i.test(msg)) {
+        onErrorRef.current?.(
+          "Mic permission blocked. Browser settings mein microphone allow karo.",
+        );
+      } else {
+        onErrorRef.current?.(msg);
+      }
     }
-  }, [busy, cleanupStream, disabled, flushAndSend, onError, setIsRecording]);
+  }, [clearTimers, flushAndSend, setIsRecording, stopRecording]);
 
-  const stopRecording = useCallback(() => {
-    if (!recordingRef.current) return;
-    setIsRecording(false);
-
-    const recorder = recorderRef.current;
-    if (recorder && recorder.state !== "inactive") {
-      recorder.stop();
+  const toggle = useCallback(() => {
+    void unlockAudio();
+    if (
+      busyRef.current ||
+      disabledRef.current ||
+      armingRef.current ||
+      startingRef.current ||
+      stoppingRef.current
+    ) {
+      return;
     }
-    recorderRef.current = null;
-    cleanupStream();
-  }, [cleanupStream, setIsRecording]);
+    if (recordingRef.current) {
+      stopRecording();
+    } else {
+      void startRecording();
+    }
+  }, [startRecording, stopRecording]);
 
+  const toggleRef = useRef(toggle);
+  toggleRef.current = toggle;
+
+  // Space toggles once per keydown. Cleanup only on unmount — never mid-recording.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.code !== "Space" || event.repeat) return;
       if (document.activeElement?.tagName === "INPUT") return;
       event.preventDefault();
-      void unlockAudio();
-      void startRecording();
+      toggleRef.current();
     };
-    const onKeyUp = (event: KeyboardEvent) => {
-      if (event.code !== "Space") return;
-      event.preventDefault();
-      stopRecording();
-    };
-
     window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      stopRecording();
+      clearTimers();
+      startingRef.current = false;
+      recSessionRef.current += 1; // invalidate any in-flight onstop send
+      if (recordingRef.current || recorderRef.current) {
+        stopRecording({ force: true });
+      }
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     };
-  }, [startRecording, stopRecording]);
-
-  const onPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    void unlockAudio(); // unlock Web Audio during the same gesture as recording
-    void startRecording();
-  };
-
-  const onPointerUp = (event: PointerEvent<HTMLButtonElement>) => {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    stopRecording();
-  };
+    // Intentionally mount-once
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const hint = busy
     ? "Audio bhej rahi hoon… STT chal raha hai"
-    : recording
-      ? "Recording… chhodo to send"
-      : "Hold mic / Space — Hinglish chalega";
+    : arming
+      ? "Mic start ho raha hai…"
+      : recording
+        ? "Recording… phir se click / Space to send"
+        : "Click mic (or Space) to talk — phir click to send";
 
   return (
     <div className="flex flex-col items-center">
@@ -185,12 +337,13 @@ export function PushToTalk({
         )}
         <motion.button
           type="button"
-          aria-label="Hold to talk"
+          aria-label={recording ? "Stop and send" : "Start talking"}
           aria-pressed={recording}
-          disabled={disabled || busy}
-          onPointerDown={onPointerDown}
-          onPointerUp={onPointerUp}
-          onPointerCancel={stopRecording}
+          disabled={disabled || busy || arming}
+          onClick={(event) => {
+            event.preventDefault();
+            toggle();
+          }}
           onContextMenu={(event) => event.preventDefault()}
           animate={{ scale: recording ? [1, 1.06, 1] : [1, 1.03, 1] }}
           transition={{
@@ -205,10 +358,16 @@ export function PushToTalk({
               : "border-primary/20 bg-gradient-to-br from-primary to-accent shadow-[0_0_70px_oklch(0.53_0.24_294/0.45)]"
           } disabled:opacity-50`}
         >
-          {recording ? <Mic className="size-6" /> : <WandSparkles className="size-6" />}
+          {recording ? (
+            <Square className="size-6 fill-current" />
+          ) : arming ? (
+            <Mic className="size-6 animate-pulse" />
+          ) : (
+            <WandSparkles className="size-6" />
+          )}
         </motion.button>
       </div>
-      <p className="mt-4 text-xs text-muted-foreground">{hint}</p>
+      <p className="mt-4 max-w-xs text-center text-xs text-muted-foreground">{hint}</p>
     </div>
   );
 }
