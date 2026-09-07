@@ -4,6 +4,8 @@ from typing import Optional
 
 class SessionResponse(BaseModel):
     session_id: str
+    detected_city: str = "Delhi"
+    greeting: str = "Hi! How can I help you today?"
 
 
 class MessageResponse(BaseModel):
