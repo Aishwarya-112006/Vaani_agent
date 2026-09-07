@@ -18,8 +18,10 @@ import {
   resultRestaurants,
   searchFiller,
   type PipelinePhase,
+  type ReplyLang,
 } from "@/lib/copy";
 import { speakLine, stopSpeaking } from "@/lib/speak";
+import { detectReplyLang } from "@/lib/lang";
 import { useWebSocket, type ToolResult } from "@/hooks/useWebSocket";
 
 import { Backdrop } from "./backdrop";
@@ -33,6 +35,10 @@ type ToolStatus = "IDLE" | "RUNNING" | "CANCELLED" | "COMPLETE";
 type Task = { type: "hotel" | "restaurant"; params: string; tool_call_id: string };
 export type { Turn };
 type Log = { kind: "turn" | "tool" | "interrupt" | "stale"; text: string };
+
+function asReplyLang(value: unknown): ReplyLang {
+  return value === "hi" ? "hi" : "en";
+}
 
 const chips = [
   "Find hotels in Delhi under ₹5000",
@@ -215,6 +221,7 @@ export function VoiceAgent() {
   const [phase, setPhase] = useState<PipelinePhase>("idle");
   const [phaseDetail, setPhaseDetail] = useState<string | undefined>();
   const [bannerError, setBannerError] = useState<string | null>(null);
+  const [replyLang, setReplyLang] = useState<ReplyLang>("en");
 
   // Real-time backend state via WebSocket
   const { state: wsState, connected: wsConnected } = useWebSocket(mounted ? session : null);
@@ -227,6 +234,12 @@ export function VoiceAgent() {
   const pendingResultRef = useRef(false);
   const spokenRequestRef = useRef<string | null>(null);
   const taskRef = useRef<Task | null>(null);
+  const replyLangRef = useRef<ReplyLang>("en");
+
+  const setLang = useCallback((next: ReplyLang) => {
+    replyLangRef.current = next;
+    setReplyLang(next);
+  }, []);
 
   const clearLocalTimers = useCallback(() => {
     timers.current.forEach((id) => window.clearTimeout(id));
@@ -246,7 +259,7 @@ export function VoiceAgent() {
     searchPulse.current = window.setInterval(() => {
       searchTick.current += 1;
       setPhase("searching");
-      setPhaseDetail(searchFiller(searchTick.current));
+      setPhaseDetail(searchFiller(searchTick.current, replyLangRef.current));
     }, 1000);
   }, [clearSearchPulse]);
 
@@ -273,21 +286,29 @@ export function VoiceAgent() {
     async (text: string) => {
       if (typeof window === "undefined" || !text.trim()) return;
       setPipeline("speaking");
-      await speakLine(text, {
-        onWaiting: () => setPipeline("speaking", "Voice ready hone wali hai…"),
-        onPlaying: () => setPipeline("speaking"),
-        onDone: () => {
-          if (toolRunningRef.current) {
-            setPipeline("searching", searchFiller(searchTick.current));
-          } else {
-            setPipeline("idle");
-          }
+      await speakLine(
+        text,
+        {
+          onWaiting: () =>
+            setPipeline(
+              "speaking",
+              replyLangRef.current === "hi" ? "Voice ready hone wali hai…" : "Voice almost ready…",
+            ),
+          onPlaying: () => setPipeline("speaking"),
+          onDone: () => {
+            if (toolRunningRef.current) {
+              setPipeline("searching", searchFiller(searchTick.current, replyLangRef.current));
+            } else {
+              setPipeline("idle");
+            }
+          },
+          onError: (message) => {
+            pushLog("stale", `TTS · ${message}`);
+            setBannerError(errTts());
+          },
         },
-        onError: (message) => {
-          pushLog("stale", `TTS · ${message}`);
-          setBannerError(errTts());
-        },
-      });
+        replyLangRef.current,
+      );
     },
     [pushLog, setPipeline],
   );
@@ -312,6 +333,7 @@ export function VoiceAgent() {
   );
 
   const lineFromToolResult = useCallback((result: ToolResult, fallbackTask: Task | null) => {
+    const lang = asReplyLang(result.reply_lang ?? replyLangRef.current);
     if (typeof result.summary === "string" && result.summary.trim()) {
       return result.summary.trim();
     }
@@ -323,18 +345,20 @@ export function VoiceAgent() {
       const area = String(
         params["area"] ?? fallbackTask?.params.match(/area=([^ ·]+)/)?.[1] ?? city,
       );
-      return resultRestaurants(area);
+      return resultRestaurants(area, lang);
     }
     const budget = String(
       params["budget"] ?? fallbackTask?.params.match(/budget=(\d+)/)?.[1] ?? "5000",
     );
-    return resultHotels(city, budget);
+    return resultHotels(city, budget, lang);
   }, []);
 
   const completeFromBackend = useCallback(
     (requestId: string, result: ToolResult, source: "ws" | "fallback") => {
       if (!pendingResultRef.current) return;
       if (spokenRequestRef.current === requestId) return;
+
+      if (result.reply_lang) setLang(asReplyLang(result.reply_lang));
 
       pendingResultRef.current = false;
       spokenRequestRef.current = requestId;
@@ -349,7 +373,7 @@ export function VoiceAgent() {
       );
       addAssistant(lineFromToolResult(result, taskRef.current));
     },
-    [addAssistant, clearLocalTimers, clearSearchPulse, lineFromToolResult, pushLog],
+    [addAssistant, clearLocalTimers, clearSearchPulse, lineFromToolResult, pushLog, setLang],
   );
 
   const runTool = useCallback(
@@ -365,12 +389,13 @@ export function VoiceAgent() {
       setRequestId(next.tool_call_id);
       pushLog("tool", `RUNNING ${next.type} · ${next.params}`);
 
+      const lang = replyLangRef.current;
       const ack =
         interruptKind === "PIVOT"
-          ? ackPivot(next.type)
+          ? ackPivot(next.type, lang)
           : interruptKind === "REFINE"
-            ? ackRefine(next.type)
-            : ackSearch(next.type, next.params);
+            ? ackRefine(next.type, lang)
+            : ackSearch(next.type, next.params, lang);
 
       setPipeline("acknowledging", ack);
       addAssistant(ack);
@@ -387,12 +412,13 @@ export function VoiceAgent() {
           tool: next.type === "restaurant" ? "search_restaurants" : "search_hotels",
           summary:
             next.type === "hotel"
-              ? resultHotels(city, budget)
-              : resultRestaurants(p.match(/area=([^ ·]+)/)?.[1] || city),
+              ? resultHotels(city, budget, replyLangRef.current)
+              : resultRestaurants(p.match(/area=([^ ·]+)/)?.[1] || city, replyLangRef.current),
           params: { city, budget: Number(budget) },
+          reply_lang: replyLangRef.current,
         };
         completeFromBackend(next.tool_call_id, synthetic, "fallback");
-      }, 5500);
+      }, 4200);
       timers.current.push(fallbackId);
     },
     [addAssistant, clearLocalTimers, completeFromBackend, pushLog, setPipeline, startSearchPulse],
@@ -407,7 +433,7 @@ export function VoiceAgent() {
     taskRef.current = null;
     fenceLocalTool();
     pushLog("interrupt", "CANCEL · in-flight search fenced");
-    addAssistant(ackCancel());
+    addAssistant(ackCancel(replyLangRef.current));
   }, [addAssistant, fenceLocalTool, pushLog]);
 
   const submit = useCallback(
@@ -419,24 +445,29 @@ export function VoiceAgent() {
       pushLog("turn", `USER · ${text}`);
       setPipeline("understanding");
 
+      // Apply language immediately so ack/TTS match the typed utterance
+      setLang(detectReplyLang(text, replyLangRef.current));
+
       const type = classify(text, task);
 
       if (session && session !== "pending") {
-        void sendTextMessage(session, text, type).catch((err) =>
-          failLoud(errNetwork(err instanceof Error ? err.message : undefined)),
-        );
+        void sendTextMessage(session, text, type)
+          .then((res) => {
+            if (res.reply_lang) setLang(asReplyLang(res.reply_lang));
+          })
+          .catch((err) => failLoud(errNetwork(err instanceof Error ? err.message : undefined)));
       }
 
       if (status === "RUNNING" && type === "STATUS") {
         setInterrupt("STATUS");
         pushLog("interrupt", "STATUS · tool continues running");
-        addAssistant(ackStatus(task?.type));
+        addAssistant(ackStatus(task?.type, replyLangRef.current));
         return;
       }
 
       if (type === "STATUS") {
         setInterrupt("STATUS");
-        addAssistant(ackStatus(task?.type));
+        addAssistant(ackStatus(task?.type, replyLangRef.current));
         return;
       }
 
@@ -456,7 +487,18 @@ export function VoiceAgent() {
       // WS completion matches via turn_id + result payload.
       runTool(next, n, kind);
     },
-    [addAssistant, cancelLocal, failLoud, pushLog, runTool, session, setPipeline, status, task],
+    [
+      addAssistant,
+      cancelLocal,
+      failLoud,
+      pushLog,
+      runTool,
+      session,
+      setLang,
+      setPipeline,
+      status,
+      task,
+    ],
   );
 
   // Speak real backend tool results (and keep DebugPanel numbers in sync)
@@ -605,7 +647,9 @@ export function VoiceAgent() {
                 <Radio className="size-4 text-brand-cyan" />
                 Live conversation
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">Hold to talk · release to send</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Click mic to talk · click again to send
+              </p>
             </div>
             <span className="font-mono text-xs text-muted-foreground">
               session_{mounted ? session : "pending"}
@@ -625,10 +669,11 @@ export function VoiceAgent() {
             }
             busyLabel={
               recording
-                ? phaseLabel("recording")
+                ? phaseLabel("recording", undefined, replyLang)
                 : sendingAudio
-                  ? phaseLabel("uploading")
-                  : phaseLabel(phase, phaseDetail) || "Vaani soch rahi hai…"
+                  ? phaseLabel("uploading", undefined, replyLang)
+                  : phaseLabel(phase, phaseDetail, replyLang) ||
+                    (replyLang === "hi" ? "Vaani soch rahi hai…" : "Vaani is thinking…")
             }
           />
 
@@ -656,13 +701,14 @@ export function VoiceAgent() {
                 setSendingAudio(busy);
                 if (busy) setPipeline("uploading");
               }}
-              onSent={({ turn_id, transcript, interrupt_type }) => {
+              onSent={({ turn_id, transcript, interrupt_type, reply_lang }) => {
                 const spoken = transcript?.trim();
                 if (!spoken) {
                   failLoud(errSttEmpty());
                   return;
                 }
 
+                if (reply_lang) setLang(asReplyLang(reply_lang));
                 setPipeline("understanding");
 
                 if (typeof turn_id === "number") {
@@ -678,12 +724,12 @@ export function VoiceAgent() {
 
                 if (status === "RUNNING" && type === "STATUS") {
                   pushLog("interrupt", "STATUS · tool continues running");
-                  addAssistant(ackStatus(task?.type));
+                  addAssistant(ackStatus(task?.type, replyLangRef.current));
                   return;
                 }
 
                 if (type === "STATUS") {
-                  addAssistant(ackStatus(task?.type));
+                  addAssistant(ackStatus(task?.type, replyLangRef.current));
                   return;
                 }
 
@@ -703,7 +749,10 @@ export function VoiceAgent() {
                 setRequestId(next.tool_call_id);
                 runTool(next, n, kind);
               }}
-              onError={(message) => failLoud(errNetwork(message))}
+              onError={(message) => {
+                // Mic/recording errors are not network failures
+                failLoud(message);
+              }}
             />
 
             <div className="mt-5 flex w-full gap-2">

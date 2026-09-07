@@ -12,6 +12,7 @@ class MessageResponse(BaseModel):
     interrupt_type: Optional[str] = None
     active_request_id: Optional[str] = None
     transcript: Optional[str] = None
+    reply_lang: Optional[str] = None
 
 
 class StatusResponse(BaseModel):
@@ -21,6 +22,7 @@ class StatusResponse(BaseModel):
     stale_discarded: int
     last_interrupt_type: Optional[str] = None
     active_request_id: Optional[str] = None
+    reply_lang: Optional[str] = None
 
 
 class EvaluateResponse(BaseModel):

@@ -18,6 +18,7 @@ from .models import SessionResponse, MessageResponse, StatusResponse, EvaluateRe
 from agent.state import create_session, get_session, ConversationState
 from agent.stt import groq_transcribe
 from agent.rime import rime_speak
+from agent.language import detect_reply_lang
 from tools.hotel_search import parse_hotel_params, search_hotels
 from tools.restaurant_search import parse_restaurant_params, search_restaurants
 
@@ -113,6 +114,7 @@ async def _run_search_hotels(
             budget=params.get("budget", 5000),
             near_metro=bool(params.get("near_metro", False)),
             veg_only=bool(params.get("veg_only", False)),
+            reply_lang=getattr(state, "reply_lang", "en") or "en",
         )
     except asyncio.CancelledError:
         log_event(
@@ -143,6 +145,7 @@ async def _run_search_restaurants(
             cuisine=params.get("cuisine", "Indian"),
             veg_only=bool(params.get("veg_only", False)),
             area=params.get("area", "Connaught Place"),
+            reply_lang=getattr(state, "reply_lang", "en") or "en",
         )
     except asyncio.CancelledError:
         log_event(
@@ -316,6 +319,9 @@ async def handle_message(
         )
         log_event("stt_ok", session_id=session_id)
 
+    if text:
+        state.reply_lang = detect_reply_lang(text, getattr(state, "reply_lang", None))
+
     classified = interrupt_type or _classify_interrupt(text or "", state)
 
     # STATUS: answer without fencing / without starting a new tool
@@ -329,6 +335,7 @@ async def handle_message(
             interrupt_type="STATUS",
             active_request_id=state.active_request_id,
             transcript=transcript or text,
+            reply_lang=state.reply_lang,
         )
 
     # Fence previous tool when interrupting a run
@@ -350,6 +357,7 @@ async def handle_message(
             interrupt_type="CANCEL",
             active_request_id=None,
             transcript=transcript or text,
+            reply_lang=state.reply_lang,
         )
 
     state.turn_id += 1
@@ -415,6 +423,7 @@ async def handle_message(
         interrupt_type=classified,
         active_request_id=request_id,
         transcript=transcript or text,
+        reply_lang=state.reply_lang,
     )
 
 
@@ -431,6 +440,7 @@ async def get_status(session_id: str):
         stale_discarded=data["stale_discarded"],
         last_interrupt_type=data["last_interrupt_type"],
         active_request_id=data["active_request_id"],
+        reply_lang=data.get("reply_lang"),
     )
 
 
@@ -481,6 +491,7 @@ async def evaluate_results():
 
 class TtsRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=2000)
+    reply_lang: Optional[str] = Field(default=None, description="en | hi")
 
 
 @app.post("/tts")
@@ -490,11 +501,16 @@ async def synthesize_speech(body: TtsRequest):
     if not text:
         raise HTTPException(status_code=400, detail="text is required")
 
+    lang = (body.reply_lang or "en").strip().lower()
+    if lang not in {"en", "hi"}:
+        lang = "en"
+
     try:
-        audio = await rime_speak(text)
+        audio = await rime_speak(text, reply_lang=lang)
     except Exception as exc:
         log_event("tts_failed")
-        raise HTTPException(status_code=502, detail=f"Rime TTS failed: {exc}") from exc
+        detail = str(exc).strip() or repr(exc)
+        raise HTTPException(status_code=502, detail=f"Rime TTS failed: {detail}") from exc
 
     if not audio:
         raise HTTPException(status_code=502, detail="Rime returned empty audio")
