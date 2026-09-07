@@ -65,10 +65,7 @@ const typeStyles: Record<string, string> = {
 
 async function loadResults(): Promise<EvalResults> {
   const bust = `t=${Date.now()}`;
-  const urls = [
-    `/evaluation/results.json?${bust}`,
-    `${API_BASE}/evaluate/results?${bust}`,
-  ];
+  const urls = [`/evaluation/results.json?${bust}`, `${API_BASE}/evaluate/results?${bust}`];
 
   let lastError: Error | null = null;
   for (const url of urls) {
@@ -156,15 +153,10 @@ export function EvalPage() {
         >
           Live numbers from{" "}
           <span className="font-mono text-foreground">evaluation/results.json</span>
-          {data?.generated_at ? (
-            <>
-              {" "}
-              · generated {formatGeneratedAt(data.generated_at)}
-            </>
-          ) : null}
-          . Re-run{" "}
-          <span className="font-mono text-foreground">python evaluation/compute_metrics.py</span>{" "}
-          to refresh — no copy-paste.
+          {data?.generated_at ? <> · generated {formatGeneratedAt(data.generated_at)}</> : null}.
+          Re-run{" "}
+          <span className="font-mono text-foreground">python evaluation/compute_metrics.py</span> to
+          refresh — no copy-paste.
         </motion.p>
       </section>
 

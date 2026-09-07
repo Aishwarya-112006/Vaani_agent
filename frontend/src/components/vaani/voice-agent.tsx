@@ -109,10 +109,7 @@ function classify(text: string, task: Task | null): Interrupt | null {
       (task.type === "restaurant" && /\bhotels?\b|\bstay\b|\broom\b/.test(s)))
   )
     return "PIVOT";
-  if (
-    task &&
-    /actually|only|vegetarian|veg|under|metro|near|rupees|₹|cuisine|area/.test(s)
-  )
+  if (task && /actually|only|vegetarian|veg|under|metro|near|rupees|₹|cuisine|area/.test(s))
     return "REFINE";
   return null;
 }
@@ -398,14 +395,7 @@ export function VoiceAgent() {
       }, 5500);
       timers.current.push(fallbackId);
     },
-    [
-      addAssistant,
-      clearLocalTimers,
-      completeFromBackend,
-      pushLog,
-      setPipeline,
-      startSearchPulse,
-    ],
+    [addAssistant, clearLocalTimers, completeFromBackend, pushLog, setPipeline, startSearchPulse],
   );
 
   const cancelLocal = useCallback(() => {
@@ -466,17 +456,7 @@ export function VoiceAgent() {
       // WS completion matches via turn_id + result payload.
       runTool(next, n, kind);
     },
-    [
-      addAssistant,
-      cancelLocal,
-      failLoud,
-      pushLog,
-      runTool,
-      session,
-      setPipeline,
-      status,
-      task,
-    ],
+    [addAssistant, cancelLocal, failLoud, pushLog, runTool, session, setPipeline, status, task],
   );
 
   // Speak real backend tool results (and keep DebugPanel numbers in sync)
