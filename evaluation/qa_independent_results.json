@@ -1,0 +1,162 @@
+[
+  {
+    "scenario_id": "T12",
+    "timestamp": 1788771650.4255397,
+    "passed": true,
+    "interrupt_type": "CANCEL",
+    "note": "backend speaks nothing on CANCEL (no Rime call in this route yet)"
+  },
+  {
+    "scenario_id": "T13",
+    "timestamp": 1788771652.5622911,
+    "passed": true,
+    "interrupt_type": "CANCEL",
+    "note": "backend speaks nothing on CANCEL (no Rime call in this route yet)"
+  },
+  {
+    "scenario_id": "T14",
+    "timestamp": 1788771654.7061985,
+    "passed": true,
+    "interrupt_type": "CANCEL",
+    "note": "backend speaks nothing on CANCEL (no Rime call in this route yet)"
+  },
+  {
+    "scenario_id": "CANCEL-EXTRA-1",
+    "timestamp": 1788771656.8974812,
+    "passed": true,
+    "interrupt_type": "CANCEL",
+    "note": "backend speaks nothing on CANCEL (no Rime call in this route yet)"
+  },
+  {
+    "scenario_id": "CANCEL-EXTRA-2",
+    "timestamp": 1788771659.19697,
+    "passed": true,
+    "interrupt_type": "CANCEL",
+    "note": "chained REFINE->CANCEL: verifies fencing survives two interrupts in a row"
+  },
+  {
+    "scenario_id": "T24",
+    "timestamp": 1788771663.5227122,
+    "passed": true,
+    "interrupt_type": "MULTI",
+    "final_params": {
+      "city": "Delhi",
+      "budget": 5000,
+      "near_metro": true,
+      "veg_only": true
+    }
+  },
+  {
+    "scenario_id": "T25",
+    "timestamp": 1788771666.716297,
+    "passed": true,
+    "interrupt_type": "EDGE",
+    "final_status": "COMPLETE"
+  },
+  {
+    "scenario_id": "T01",
+    "timestamp": 1788771670.1976628,
+    "passed": true,
+    "latency_ms": 3451.05329999933
+  },
+  {
+    "scenario_id": "T02",
+    "timestamp": 1788771673.6624408,
+    "passed": true,
+    "note": "restaurant tool now wired in correctly"
+  },
+  {
+    "scenario_id": "T03",
+    "timestamp": 1788771673.6820042,
+    "passed": false,
+    "note": "classify_intent no longer importable from agent.interrupt: cannot import name 'classify_intent' from 'agent.interrupt' (C:\\Users\\harsh\\Desktop\\Vaani_agent\\backend\\agent\\interrupt.py). Check if it was renamed/moved, or if intent selection now happens differently."
+  },
+  {
+    "scenario_id": "T18",
+    "timestamp": 1788771673.800224,
+    "passed": true,
+    "note": "PIVOT classified and executed correctly (hotel<->restaurant swap works via _resolve_tool_kind)"
+  },
+  {
+    "scenario_id": "T04",
+    "timestamp": 1788771674.3906362,
+    "passed": true,
+    "interrupt_type": "REFINE"
+  },
+  {
+    "scenario_id": "T05",
+    "timestamp": 1788771674.5485847,
+    "passed": true,
+    "interrupt_type": "REFINE"
+  },
+  {
+    "scenario_id": "T06",
+    "timestamp": 1788771674.704662,
+    "passed": true,
+    "interrupt_type": "REFINE"
+  },
+  {
+    "scenario_id": "T07",
+    "timestamp": 1788771674.859385,
+    "passed": true,
+    "interrupt_type": "REFINE"
+  },
+  {
+    "scenario_id": "T08",
+    "timestamp": 1788771675.0109766,
+    "passed": true,
+    "interrupt_type": "REFINE"
+  },
+  {
+    "scenario_id": "T09",
+    "timestamp": 1788771675.1686676,
+    "passed": true,
+    "interrupt_type": "REFINE"
+  },
+  {
+    "scenario_id": "T11",
+    "timestamp": 1788771675.474977,
+    "passed": true,
+    "interrupt_type": "REFINE"
+  },
+  {
+    "scenario_id": "T21",
+    "timestamp": 1788771679.4453783,
+    "passed": true,
+    "note": "stale_discarded=0 (0 is fine if cancellation beat completion)"
+  },
+  {
+    "scenario_id": "T22",
+    "timestamp": 1788771682.8713937,
+    "passed": true,
+    "stale_discarded": 0
+  },
+  {
+    "scenario_id": "T23",
+    "timestamp": 1788771688.8927245,
+    "passed": true,
+    "stale_discarded": 0,
+    "note": "race-condition test -- see docstring for interpretation"
+  },
+  {
+    "scenario_id": "T15",
+    "timestamp": 1788771692.1882956,
+    "passed": true,
+    "interrupt_type": "STATUS",
+    "note": "backend speaks nothing on STATUS (no Rime call in this route yet)"
+  },
+  {
+    "scenario_id": "T16",
+    "timestamp": 1788771696.0434618,
+    "passed": true,
+    "interrupt_type": "STATUS",
+    "note": "backend speaks nothing on STATUS (no Rime call in this route yet)"
+  },
+  {
+    "scenario_id": "T17",
+    "timestamp": 1788771700.1473415,
+    "passed": true,
+    "interrupt_type": "STATUS",
+    "note": "backend speaks nothing on STATUS (no Rime call in this route yet)"
+  }
+]
