@@ -165,7 +165,10 @@ export async function unlockAudio(): Promise<void> {
   unlockHtmlAudio();
 
   // Keep context alive when tab becomes visible again (mobile Safari)
-  if (typeof document !== "undefined" && !(document as Document & { __vaaniAudioVis?: boolean }).__vaaniAudioVis) {
+  if (
+    typeof document !== "undefined" &&
+    !(document as Document & { __vaaniAudioVis?: boolean }).__vaaniAudioVis
+  ) {
     (document as Document & { __vaaniAudioVis?: boolean }).__vaaniAudioVis = true;
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && sharedCtx?.state === "suspended") {
@@ -202,13 +205,7 @@ function sniffMime(bytes: ArrayBuffer): string {
   if (u8.length >= 3 && u8[0] === 0x49 && u8[1] === 0x44 && u8[2] === 0x33) return "audio/mpeg";
   if (u8.length >= 2 && u8[0] === 0xff && (u8[1] & 0xe0) === 0xe0) return "audio/mpeg";
   // RIFF WAVE
-  if (
-    u8.length >= 12 &&
-    u8[0] === 0x52 &&
-    u8[1] === 0x49 &&
-    u8[2] === 0x46 &&
-    u8[3] === 0x46
-  ) {
+  if (u8.length >= 12 && u8[0] === 0x52 && u8[1] === 0x49 && u8[2] === 0x46 && u8[3] === 0x46) {
     return "audio/wav";
   }
   // ftyp → m4a/aac

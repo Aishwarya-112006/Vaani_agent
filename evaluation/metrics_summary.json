@@ -1,0 +1,21 @@
+{
+  "interrupt_detection_accuracy_pct": 82.4,
+  "interrupt_detection_sample": "14/17",
+  "interrupt_detection_missing_ids": [
+    "T10",
+    "T19",
+    "T20"
+  ],
+  "stale_response_block_rate_pct": 100.0,
+  "stale_block_sample": "3/3",
+  "stale_block_missing_ids": [],
+  "context_preservation_rate_pct": 82.4,
+  "context_preservation_sample": "14/17",
+  "context_preservation_note": "proxy metric -- reuses interrupt_detection_accuracy_pct; no test file currently records a dedicated context_correct field",
+  "avg_interruption_recovery_latency_ms": null,
+  "avg_interruption_recovery_latency_ms_note": "not measured -- no test file in this suite currently records a latency_ms field on results_recorder.record(); this is an unmeasured metric, not a computed 0-sample average",
+  "status_non_cancellation_rate_pct": 100.0,
+  "status_non_cancellation_sample": "3/3",
+  "status_non_cancellation_missing_ids": [],
+  "note": "Small sample, exploratory -- see RIME_EVIDENCE.md limitations section."
+}
