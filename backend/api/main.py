@@ -216,8 +216,8 @@ async def _finalize_tool_result(
 def _restaurant_signal(text: str) -> bool:
     return bool(
         re.search(
-            # Include common typo "resturant"
-            r"\brestaurants?\b|\bresturants?\b|food|eat|dinner|lunch|breakfast|cafe|cuisine|thali|dining",
+            # Common typos: resturant / restraunt
+            r"\brestaurants?\b|\bresturants?\b|\brestraunts?\b|food|eat|dinner|lunch|breakfast|cafe|cuisine|thali|dining|khana|khaana",
             (text or "").lower(),
         )
     )
@@ -227,7 +227,7 @@ def _hotel_signal(text: str) -> bool:
     # Note: budget / metro alone are hotel REFINE cues, not tool switches
     return bool(
         re.search(
-            r"\bhotels?\b|\bstay\b|\brooms?\b|lodging|accommodation|resort",
+            r"\bhotels?\b|\bhotals?\b|\bstay\b|\brooms?\b|lodging|accommodation|resort",
             (text or "").lower(),
         )
     )
@@ -379,7 +379,16 @@ async def handle_message(
             raise HTTPException(status_code=429, detail="Voice service is busy right now. Please wait a moment and try again.") from exc
         except Exception as exc:
             log_event("stt_failed", session_id=session_id)
-            raise HTTPException(status_code=502, detail=f"Speech-to-text failed: {exc}") from exc
+            err_l = str(exc).lower()
+            if "403" in err_l or "access denied" in err_l or "permission" in err_l or "unauthorized" in err_l:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Speech-to-text unavailable (network/key). Type your request instead.",
+                ) from exc
+            raise HTTPException(
+                status_code=502,
+                detail=f"Speech-to-text failed: {exc}",
+            ) from exc
 
         if not transcript:
             raise HTTPException(status_code=400, detail="Could not understand audio — try again")

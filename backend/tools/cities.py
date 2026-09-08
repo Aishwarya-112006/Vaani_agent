@@ -6,15 +6,27 @@ from typing import Optional
 
 # Canonical display name → substrings that map to it (checked in utterance lowercased)
 _CITY_ALIASES: list[tuple[str, tuple[str, ...]]] = [
-    ("Delhi", ("delhi", "new delhi", "ncr")),
-    ("Mumbai", ("mumbai", "bombay")),
-    ("Bangalore", ("bangalore", "bengaluru", "banglore", "bangalor", "bengalooru", "blr")),
-    ("Hyderabad", ("hyderabad", "hyd")),
-    ("Chennai", ("chennai", "madras")),
-    ("Pune", ("pune",)),
-    ("Kolkata", ("kolkata", "calcutta")),
+    ("Delhi", ("new delhi", "dilli", "delli", "delhi", "ncr")),
+    ("Mumbai", ("mumbai", "bombay", "bambai", "mumbay")),
+    (
+        "Bangalore",
+        (
+            "bangalore",
+            "bengaluru",
+            "banglore",
+            "bangalor",
+            "bengalooru",
+            "benglore",
+            "bangaluru",
+            "blr",
+        ),
+    ),
+    ("Hyderabad", ("hyderabad", "hyd", "hydrabad", "hyderbad")),
+    ("Chennai", ("chennai", "madras", "chenai")),
+    ("Pune", ("pune", "poona")),
+    ("Kolkata", ("kolkata", "calcutta", "kalkata")),
     ("Goa", ("goa",)),
-    ("Jaipur", ("jaipur",)),
+    ("Jaipur", ("jaipur", "jaypur")),
 ]
 
 

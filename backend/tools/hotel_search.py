@@ -46,7 +46,7 @@ def parse_hotel_params(
 
     near_metro = prev.get("near_metro", False)
     if re.search(
-        r"near\s+(?:\w+\s+){0,4}metro|metro\s+station|metro\s+ke\s+paas|metro\s+paas",
+        r"near\s+(?:\w+\s+){0,4}metro|metro\s+station|metro\s+ke\s+paas|metro\s+paas|metro\s+ke\s+pass",
         s,
     ):
         near_metro = True
@@ -54,7 +54,10 @@ def parse_hotel_params(
         near_metro = False
 
     veg_only = prev.get("veg_only", False)
-    if re.search(r"\bveg(?:etarian)?\b|veg[- ]?only|veg[- ]?friendly|shakahari", s):
+    if re.search(
+        r"\bveg(?:etarian)?\b|veg[- ]?only|veg[- ]?friendly|shakahari|pure\s+veg|sirf\s+veg",
+        s,
+    ):
         veg_only = True
     if re.search(r"non[- ]?veg|any food|nonveg", s):
         veg_only = False
@@ -164,8 +167,6 @@ async def search_hotels(
     for hotel in hotels_for_city(city_key):
         if hotel["price_inr"] > cap:
             continue
-        if near_metro and not hotel["near_metro"]:
-            continue
         if veg_only and not hotel["veg_friendly"]:
             continue
         results.append(
@@ -178,8 +179,15 @@ async def search_hotels(
                 "near_metro": hotel["near_metro"],
                 "veg_friendly": hotel["veg_friendly"],
                 "amenities": hotel["amenities"],
+                "_metro_match": bool(hotel["near_metro"]),
             }
         )
+
+    # Prefer metro matches when requested; hard-drop only if we still have enough hits
+    if near_metro:
+        metro_hits = [h for h in results if h["_metro_match"]]
+        if len(metro_hits) >= 2:
+            results = metro_hits
 
     # Always return something useful for the demo
     if not results:
@@ -193,11 +201,18 @@ async def search_hotels(
                 "near_metro": near_metro,
                 "veg_friendly": veg_only,
                 "amenities": ["wifi"],
+                "_metro_match": near_metro,
             }
         ]
 
-    results.sort(key=lambda h: (-h["rating"], h["price_inr"]))
-    top = results[:3]
+    results.sort(
+        key=lambda h: (
+            -int(h.get("_metro_match", False)) if near_metro else 0,
+            -h["rating"],
+            h["price_inr"],
+        )
+    )
+    top = [{k: v for k, v in h.items() if not k.startswith("_")} for h in results[:3]]
 
     payload = {
         "tool": "search_hotels",

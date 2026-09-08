@@ -103,14 +103,17 @@ def parse_restaurant_params(
                 area = candidate.title()
 
     veg_only = prev.get("veg_only", False)
-    if re.search(r"\bveg(?:etarian)?\b|veg[- ]?only|pure\s+veg", s):
+    if re.search(
+        r"\bveg(?:etarian)?\b|veg[- ]?only|pure\s+veg|shakahari|sirf\s+veg",
+        s,
+    ):
         veg_only = True
     if re.search(r"non[- ]?veg|any food|nonveg", s):
         veg_only = False
 
     near_metro = bool(prev.get("near_metro", False))
     if re.search(
-        r"near\s+(?:\w+\s+){0,4}metro|metro\s+station|metro\s+ke\s+paas|metro\s+paas",
+        r"near\s+(?:\w+\s+){0,4}metro|metro\s+station|metro\s+ke\s+paas|metro\s+paas|metro\s+ke\s+pass",
         s,
     ):
         near_metro = True

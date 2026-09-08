@@ -4,7 +4,7 @@ import { Mic, Square, WandSparkles } from "lucide-react";
 
 import { sendAudioMessage, type MessageResponse } from "@/lib/api";
 import { unlockAudio } from "@/lib/audio";
-import { errShortClip } from "@/lib/copy";
+import { errShortClip, errSttBusy, errSttFailed } from "@/lib/copy";
 
 const MIME_CANDIDATES = [
   "audio/webm;codecs=opus",
@@ -116,9 +116,19 @@ export function PushToTalk({
       const result = await sendAudioMessage(sessionIdRef.current, blob);
       onSentRef.current?.({ ...result, bytes: blob.size });
     } catch (error) {
-      onErrorRef.current?.(
-        error instanceof Error ? error.message : "Failed to send audio to /message",
-      );
+      const raw = error instanceof Error ? error.message : "Failed to send audio to /message";
+      const status = (error as Error & { status?: number })?.status;
+      if (status === 429 || /busy|rate.?limit/i.test(raw)) {
+        onErrorRef.current?.(errSttBusy());
+      } else if (
+        status === 502 ||
+        status === 503 ||
+        /speech-to-text|stt|access denied|403|transcription|whisper|groq/i.test(raw)
+      ) {
+        onErrorRef.current?.(errSttFailed());
+      } else {
+        onErrorRef.current?.(raw);
+      }
     } finally {
       busyRef.current = false;
       setBusy(false);
