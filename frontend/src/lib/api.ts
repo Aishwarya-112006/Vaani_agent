@@ -16,6 +16,8 @@ export type MessageResponse = {
   transcript?: string | null;
   reply_lang?: string | null;
   fact_summary?: string | null;
+  need_city?: boolean;
+  need_budget?: boolean;
 };
 
 export async function createSession(): Promise<SessionResponse> {

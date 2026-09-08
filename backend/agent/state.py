@@ -19,7 +19,7 @@ class ConversationState:
     active_request_id: Optional[str] = None
     last_tool_result: Optional[dict] = None
     reply_lang: str = "en"  # 'en' | 'hi' — mirrors last clear user utterance
-    preferred_city: str = "Delhi"
+    preferred_city: Optional[str] = None  # set only after user confirms /city
     detected_city: str = "Delhi"
 
     def to_dict(self) -> dict:

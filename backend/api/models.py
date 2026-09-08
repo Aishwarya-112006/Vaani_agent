@@ -28,6 +28,8 @@ class MessageResponse(BaseModel):
     transcript: Optional[str] = None
     reply_lang: Optional[str] = None
     fact_summary: Optional[str] = None
+    need_city: bool = False
+    need_budget: bool = False
 
 
 class StatusResponse(BaseModel):

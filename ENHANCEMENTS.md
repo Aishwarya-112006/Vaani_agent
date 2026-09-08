@@ -70,7 +70,7 @@ Use this as the single checklist before demo day — and to **split GitHub issue
 ### D2. Wikipedia FACT interrupt — **DONE** (core) · Owners: Backend + Frontend
 - [x] **Backend:** FACT classify, `tools/wikipedia.py`, no tool cancel, `fact_summary`
 - [x] **Frontend:** FACT path — speak summary, no fence
-- [ ] **Backend (open):** FACT eval + `tests/test_fact.py` → **E1**
+- [x] **Backend:** FACT eval + `tests/test_fact.py` → **E1**
 
 ### D3. Voice UX reliability — **DONE** · Owner: Frontend (+ Backend summaries/delay)
 - [x] **Frontend:** click-to-toggle mic, session guard, Rime-only speak, EN/HI copy
@@ -100,9 +100,9 @@ Use this as the single checklist before demo day — and to **split GitHub issue
 ## B. UX / product
 
 ### B1. Constraint chips + confirm — **P0** · Owner: **Frontend**
-- [ ] Chips: `city` · `budget` · `veg` · `metro` · `cuisine` · `area`
-- [ ] Tap → remove → auto REFINE
-- [ ] Optional confirm line before first search
+- [x] Chips: `city` · `budget` · `veg` · `metro` · `cuisine` · `area`
+- [x] Tap → remove → auto REFINE
+- [x] Optional confirm line before first search
 
 **Files:** `voice-agent.tsx`, `copy.ts`  
 **Backend:** none (uses existing params)
@@ -110,8 +110,8 @@ Use this as the single checklist before demo day — and to **split GitHub issue
 ---
 
 ### B2. Post-result follow-ups — **P1** · Owner: **Frontend**
-- [ ] After COMPLETE: Cheaper? / Metro? / Veg? / Restaurants?
-- [ ] One-tap → existing refine/pivot utterances
+- [x] After COMPLETE: Cheaper? / Metro? / Veg? / Restaurants?
+- [x] One-tap → existing refine/pivot utterances
 
 **Backend:** none
 
@@ -119,9 +119,9 @@ Use this as the single checklist before demo day — and to **split GitHub issue
 
 ### B3. Compare top 2 — **P1** · Owner: **Both** (split issues)
 **Backend issue**
-- [ ] Build contrast line in `summary` when `count >= 2`  
+- [x] Build contrast line in `summary` when `count >= 2`  
 **Frontend issue**
-- [ ] Fallback copy if summary missing; keep TTS short
+- [x] Fallback copy if summary missing; keep TTS short
 
 **Files BE:** `hotel_search.py`, `restaurant_search.py`  
 **Files FE:** `copy.ts`, `voice-agent.tsx`
@@ -130,15 +130,15 @@ Use this as the single checklist before demo day — and to **split GitHub issue
 
 ### B4. Ambiguity ask — **P1** · Owner: **Both**
 **Backend**
-- [ ] Signal “city required” / don’t silently invent city when no preferred_city  
+- [x] Signal “city required” / don’t silently invent city when no preferred_city  
 **Frontend**
-- [ ] Speak `Kaunsa city?` / budget ask; wait for user before `runTool`
+- [x] Speak `Kaunsa city?` / budget ask; wait for user before `runTool`
 
 ---
 
 ### B5. Barge-in while speaking — **P1** · Owner: **Frontend**
-- [ ] Mic / type while TTS → `stopSpeaking()` + new interrupt
-- [ ] AudioContext stays unlocked
+- [x] Mic / type while TTS → `stopSpeaking()` + new interrupt
+- [x] AudioContext stays unlocked
 
 **Files:** `speak.ts`, `PushToTalk.tsx`, `voice-agent.tsx`  
 **Backend:** none
@@ -146,8 +146,8 @@ Use this as the single checklist before demo day — and to **split GitHub issue
 ---
 
 ### B6. One-click judge demos — **P0** · Owner: **Frontend**
-- [ ] Scripts: REFINE · STATUS · FACT · PIVOT
-- [ ] DebugPanel shows correct state after each
+- [x] Scripts: REFINE · STATUS · FACT · PIVOT
+- [x] DebugPanel shows correct state after each
 
 **Files:** `voice-agent.tsx`, `lib/demos.ts`  
 **Backend:** none (uses live APIs)
@@ -155,8 +155,8 @@ Use this as the single checklist before demo day — and to **split GitHub issue
 ---
 
 ### B7. Same search, new city — **P2** · Owner: **Both**
-**Backend:** parse “same but Mumbai” → keep other params  
-**Frontend:** classify / chip optional
+- [x] **Backend:** parse “same but Mumbai” → keep other params  
+- [x] **Frontend:** chip `Same · Mumbai` + parseTask path
 
 ---
 
@@ -173,14 +173,14 @@ Use this as the single checklist before demo day — and to **split GitHub issue
 ---
 
 ### B10. Mock “book first” — **P2** · Owner: **Both**
-**Backend:** optional confirm endpoint or tool result flag  
-**Frontend:** utter + speak mock booking line
+- [x] **Frontend:** utter + speak mock booking line (`Book first?` chip)
+- [ ] **Backend:** optional confirm endpoint (FE mock is enough for demo)
 
 ---
 
 ### B11. Prefetch / reduce silence — **P1** · Owner: **Frontend**
-- [ ] Polish ack → COMPLETE gap (same Rime voice only; no browser bridge)
-- [ ] Honest searching pulse
+- [x] Polish ack → COMPLETE gap (same Rime voice only; no browser bridge)
+- [x] Honest searching pulse
 
 **Files:** `voice-agent.tsx`, `speak.ts`  
 **Backend:** none (delay already tuned)
@@ -220,9 +220,9 @@ Use this as the single checklist before demo day — and to **split GitHub issue
 |------|-----|-------|
 | Harness must not feed `interrupt_type` | P1 | Backend |
 | FACT scenarios in `scenarios.json` | P1 | Backend |
-| `tests/test_fact.py` | P1 | Backend |
+| `tests/test_fact.py` | DONE | Backend |
 | Keep pytest green | P1 | Backend |
-| EvalPage FACT / qa JSON | P2 | **Frontend** |
+| EvalPage FACT / qa JSON | DONE | **Frontend** |
 
 ---
 
@@ -230,8 +230,8 @@ Use this as the single checklist before demo day — and to **split GitHub issue
 
 | Item | Pri | Owner |
 |------|-----|-------|
-| 60s judge script (`DEMO.md`) incl. FACT + greeting | P0 | Docs |
-| Key checklist | P0 | Docs |
+| 60s judge script (`DEMO.md` + `/demo`) incl. FACT + greeting | DONE | Docs |
+| Key checklist | DONE | Docs |
 | Screen recording / GIF | P1 | Docs (anyone) |
 | Architecture one-pager | P2 | Docs |
 
@@ -308,24 +308,32 @@ UI / Rime playback
 
 ## Suggested build order (demo day)
 
-1. **Frontend:** B1 chips + B6 judge demos  
-2. **Frontend:** B5 barge-in + B11 silence polish  
-3. **Both/Backend:** B3 compare top 2 + E1 FACT tests  
-4. **Frontend:** B2 follow-ups · **Both:** B4 ambiguity · C classify sync  
-5. **Docs:** F 60s script  
-6. **Backend:** A4 real places only if needed  
+1. ~~Frontend: B1 chips + B6 judge demos~~ **DONE**
+2. ~~Frontend: B5 barge-in + B11 silence polish~~ **DONE**
+3. ~~Both/Backend: B3 compare + E1 FACT tests~~ **DONE** (FACT tests added)
+4. ~~Frontend: B2 follow-ups · Both: B4 ambiguity~~ **DONE**
+5. ~~Docs: F 60s script~~ **DONE** (`DEMO.md` + `/demo`)
+6. **Later / optional:** B8 undo · B9 latency · A4 real places · H1 split `voice-agent.tsx`
 
 ---
 
-## Definition of done
+## Still open (relative leftover)
 
-- [ ] Works with mic **and** text  
-- [ ] EN + HI short copy  
-- [ ] Feedback within ~1s  
-- [ ] Does not break REFINE / CANCEL / STATUS / PIVOT / FACT / stale fence  
-- [ ] DebugPanel truthful  
-- [ ] Test or eval scenario if interrupt/tool behavior changes  
-- [ ] Issue labeled `frontend` / `backend` / `docs` + priority  
+| ID | Pri | Owner | Status |
+|----|-----|-------|--------|
+| B8 | P2 | Both | Undo last interrupt — **leave** (nice-to-have) |
+| A4 / A3 | P2/SKIP | Backend | Real OSM places — **leave** (mock is demo-honest) |
+| H1 | P1 | Frontend | Split `voice-agent.tsx` — **leave** (refactor only) |
+| H3 / H4 | P2 | Frontend | Dep trim / copy audit — **leave** |
+| D2–D4 | P2 | Backend/Docs | Docker / Rime-down — **leave** |
+
+**Closed this pass (needed):**
+- TS Problems: `copy.ts` index access + `tsconfig`/`vite-env.d.ts` for lucide/framer
+- C1 / H2: shared `lib/interrupt.ts` ↔ BE `_classify_interrupt`
+- C2: audio path prefers BE `interrupt_type` (already wired)
+- B9: DebugPanel `tool_delay` + `ack→complete` badges
+- D1: CORS logged at boot + `.env.example` deploy note
+- E2: conftest documents no client-fed `interrupt_type` for scored suite
 
 ---
 
@@ -335,9 +343,10 @@ UI / Rime playback
 |-----------|---------|-------|
 | City opener | IPInfo greeting | Done (Both) |
 | Interrupt | REFINE / CANCEL / STATUS | Done |
-| Aside | FACT Wikipedia | Done core; tests = Backend |
+| Aside | FACT Wikipedia | Done (+ tests) |
 | Voice | One Rime voice, click mic | Done (Frontend) |
-| Polish next | Chips B1 + demos B6 | **Frontend** |
+| Polish | Chips B1 + demos B6 + `/demo` | Done |
+| Evidence | `/evaluate` harness + QA tab | Done |
 
 ---
 

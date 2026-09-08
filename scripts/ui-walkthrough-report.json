@@ -1,0 +1,660 @@
+{
+  "base": "http://localhost:8080",
+  "startedAt": "2026-09-08T14:13:49.335Z",
+  "pages": [
+    {
+      "label": "home",
+      "title": "VaaniAgent — A voice agent that stays correct when you change your mind",
+      "url": "http://localhost:8080/",
+      "buttons": [
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Yes"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Change city"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Start talking"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Send"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Demo · REFINE"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Demo · STATUS"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Demo · FACT"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Demo · PIVOT"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "REFINE Merge new constraints into the active task without losing context. “Actua"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "CANCEL Fence the in-flight tool call and clear the task cleanly. “Forget it — st"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "STATUS Answer immediately while the original search keeps running. “What are you"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "FACT Wikipedia aside — speak a fact without cancelling the search. “What is Conn"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "PIVOT Switch domains and invalidate the previous result. “Find restaurants there"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Try the demo · Find hotels in Delhi under ₹5000"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Actually, only vegetarian and near a metro"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "What are you searching for?"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "What is Connaught Place?"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Forget it"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Find restaurants in Connaught Place instead"
+        }
+      ],
+      "links": [
+        {
+          "tag": "a",
+          "href": "/",
+          "disabled": false,
+          "text": "V VaaniAgent interruptible intelligence"
+        },
+        {
+          "tag": "a",
+          "href": "/",
+          "disabled": false,
+          "text": "Voice lab"
+        },
+        {
+          "tag": "a",
+          "href": "/demo",
+          "disabled": false,
+          "text": "Demo"
+        },
+        {
+          "tag": "a",
+          "href": "/evaluate",
+          "disabled": false,
+          "text": "Evaluation"
+        }
+      ],
+      "inputs": [
+        {
+          "tag": "input",
+          "disabled": false,
+          "text": ""
+        }
+      ],
+      "headings": [
+        "A voice agent that stays correct when you change your mind.",
+        "Live debug",
+        "Every “wait” has a different meaning.",
+        "Skip the happy path."
+      ],
+      "buttonCount": 19,
+      "linkCount": 4,
+      "inputCount": 1
+    },
+    {
+      "label": "nav-Demo",
+      "title": "60s judge script — VaaniAgent",
+      "url": "http://localhost:8080/demo",
+      "buttons": [],
+      "links": [
+        {
+          "tag": "a",
+          "href": "/",
+          "disabled": false,
+          "text": "V VaaniAgent 60s judge script"
+        },
+        {
+          "tag": "a",
+          "href": "/",
+          "disabled": false,
+          "text": "Voice lab"
+        },
+        {
+          "tag": "a",
+          "href": "/demo",
+          "disabled": false,
+          "text": "Demo"
+        },
+        {
+          "tag": "a",
+          "href": "/evaluate",
+          "disabled": false,
+          "text": "Evaluation"
+        },
+        {
+          "tag": "a",
+          "href": "/",
+          "disabled": false,
+          "text": "Open Voice lab"
+        },
+        {
+          "tag": "a",
+          "href": "/evaluate",
+          "disabled": false,
+          "text": "Evaluation harness"
+        }
+      ],
+      "inputs": [],
+      "headings": [
+        "Judge script in 60 seconds",
+        "Confirm city",
+        "Start a search",
+        "Interrupt mid-flight",
+        "After COMPLETE",
+        "Show the judge panel"
+      ],
+      "buttonCount": 0,
+      "linkCount": 6,
+      "inputCount": 0
+    },
+    {
+      "label": "nav-Evaluation",
+      "title": "Evaluation harness — VaaniAgent",
+      "url": "http://localhost:8080/evaluate",
+      "buttons": [
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Metrics harness"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "QA independent (27/27)"
+        }
+      ],
+      "links": [
+        {
+          "tag": "a",
+          "href": "/",
+          "disabled": false,
+          "text": "V VaaniAgent stays correct when you change your mind"
+        },
+        {
+          "tag": "a",
+          "href": "/",
+          "disabled": false,
+          "text": "Voice lab"
+        },
+        {
+          "tag": "a",
+          "href": "/demo",
+          "disabled": false,
+          "text": "Demo"
+        },
+        {
+          "tag": "a",
+          "href": "/evaluate",
+          "disabled": false,
+          "text": "Evaluation"
+        }
+      ],
+      "inputs": [],
+      "headings": [
+        "Evaluation harness",
+        "Scenario results"
+      ],
+      "buttonCount": 2,
+      "linkCount": 4,
+      "inputCount": 0
+    },
+    {
+      "label": "nav-Voice lab",
+      "title": "VaaniAgent — A voice agent that stays correct when you change your mind",
+      "url": "http://localhost:8080/",
+      "buttons": [
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "change city"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": true,
+          "text": "Start talking"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Send"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Demo · REFINE"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Demo · STATUS"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Demo · FACT"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Demo · PIVOT"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "REFINE Merge new constraints into the active task without losing context. “Actua"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "CANCEL Fence the in-flight tool call and clear the task cleanly. “Forget it — st"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "STATUS Answer immediately while the original search keeps running. “What are you"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "FACT Wikipedia aside — speak a fact without cancelling the search. “What is Conn"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "PIVOT Switch domains and invalidate the previous result. “Find restaurants there"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Try the demo · Find hotels in Delhi under ₹5000"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Actually, only vegetarian and near a metro"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "What are you searching for?"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "What is Connaught Place?"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Forget it"
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "disabled": false,
+          "text": "Find restaurants in Connaught Place instead"
+        }
+      ],
+      "links": [
+        {
+          "tag": "a",
+          "href": "/",
+          "disabled": false,
+          "text": "V VaaniAgent interruptible intelligence"
+        },
+        {
+          "tag": "a",
+          "href": "/",
+          "disabled": false,
+          "text": "Voice lab"
+        },
+        {
+          "tag": "a",
+          "href": "/demo",
+          "disabled": false,
+          "text": "Demo"
+        },
+        {
+          "tag": "a",
+          "href": "/evaluate",
+          "disabled": false,
+          "text": "Evaluation"
+        }
+      ],
+      "inputs": [
+        {
+          "tag": "input",
+          "disabled": false,
+          "text": ""
+        }
+      ],
+      "headings": [
+        "A voice agent that stays correct when you change your mind.",
+        "Live debug",
+        "Every “wait” has a different meaning.",
+        "Skip the happy path."
+      ],
+      "buttonCount": 18,
+      "linkCount": 4,
+      "inputCount": 1
+    }
+  ],
+  "flows": [
+    {
+      "label": "home:button-pass",
+      "results": [
+        {
+          "text": "Yes",
+          "action": "clicked"
+        },
+        {
+          "text": "Start talking",
+          "action": "skip-heavy"
+        },
+        {
+          "text": "",
+          "action": "clicked"
+        },
+        {
+          "text": "Demo · REFINE",
+          "action": "skip-listed"
+        },
+        {
+          "text": "Demo · STATUS",
+          "action": "skip-listed"
+        },
+        {
+          "text": "Demo · FACT",
+          "action": "skip-listed"
+        },
+        {
+          "text": "Demo · PIVOT",
+          "action": "skip-listed"
+        },
+        {
+          "text": "REFINE Merge new constraints into the active task without losing context. “Actually, make it vegetarian and near a metro.”",
+          "action": "clicked"
+        },
+        {
+          "text": "CANCEL Fence the in-flight tool call and clear the task cleanly. “Forget it — stop searching.”",
+          "action": "clicked"
+        },
+        {
+          "text": "STATUS Answer immediately while the original search keeps running. “What are you searching for?”",
+          "action": "clicked"
+        },
+        {
+          "text": "FACT Wikipedia aside — speak a fact without cancelling the search. “What is Connaught Place?”",
+          "action": "clicked"
+        },
+        {
+          "text": "PIVOT Switch domains and invalidate the previous result. “Find restaurants there instead.”",
+          "action": "clicked"
+        },
+        {
+          "text": "Try the demo · Find hotels in Delhi under ₹5000",
+          "action": "skip-listed"
+        },
+        {
+          "text": "Actually, only vegetarian and near a metro",
+          "action": "clicked"
+        },
+        {
+          "text": "What are you searching for?",
+          "action": "clicked"
+        },
+        {
+          "text": "What is Connaught Place?",
+          "action": "clicked"
+        },
+        {
+          "text": "Forget it",
+          "action": "clicked"
+        },
+        {
+          "text": "Find restaurants in Connaught Place instead",
+          "action": "clicked"
+        },
+        {
+          "text": "",
+          "action": "skip-disabled"
+        }
+      ]
+    },
+    {
+      "label": "nav-Demo:button-pass",
+      "results": []
+    },
+    {
+      "label": "nav-Evaluation:button-pass",
+      "results": [
+        {
+          "text": "Metrics harness",
+          "action": "clicked"
+        },
+        {
+          "text": "QA independent (27/27)",
+          "action": "clicked"
+        }
+      ]
+    },
+    {
+      "label": "nav-Voice lab:button-pass",
+      "results": [
+        {
+          "text": "change city",
+          "action": "clicked"
+        },
+        {
+          "text": "Change city",
+          "action": "clicked"
+        },
+        {
+          "text": "Bangalore",
+          "action": "clicked"
+        },
+        {
+          "text": "Demo · REFINE",
+          "action": "skip-listed"
+        },
+        {
+          "text": "Demo · STATUS",
+          "action": "skip-listed"
+        },
+        {
+          "text": "Demo · FACT",
+          "action": "skip-listed"
+        },
+        {
+          "text": "Demo · PIVOT",
+          "action": "skip-listed"
+        },
+        {
+          "text": "REFINE Merge new constraints into the active task without losing context. “Actually, make it vegetarian and near a metro.”",
+          "action": "clicked"
+        },
+        {
+          "text": "CANCEL Fence the in-flight tool call and clear the task cleanly. “Forget it — stop searching.”",
+          "action": "clicked"
+        },
+        {
+          "text": "STATUS Answer immediately while the original search keeps running. “What are you searching for?”",
+          "action": "clicked"
+        },
+        {
+          "text": "FACT Wikipedia aside — speak a fact without cancelling the search. “What is Connaught Place?”",
+          "action": "clicked"
+        },
+        {
+          "text": "PIVOT Switch domains and invalidate the previous result. “Find restaurants there instead.”",
+          "action": "clicked"
+        },
+        {
+          "text": "Try the demo · Find hotels in Delhi under ₹5000",
+          "action": "skip-listed"
+        },
+        {
+          "text": "Actually, only vegetarian and near a metro",
+          "action": "clicked"
+        },
+        {
+          "text": "What are you searching for?",
+          "action": "clicked"
+        },
+        {
+          "text": "What is Connaught Place?",
+          "action": "clicked"
+        },
+        {
+          "text": "Forget it",
+          "action": "clicked"
+        },
+        {
+          "text": "Find restaurants in Connaught Place instead",
+          "action": "clicked"
+        }
+      ]
+    },
+    {
+      "name": "typed-conversation",
+      "steps": [
+        {
+          "step": "city-yes",
+          "ok": true
+        },
+        {
+          "step": "search-hotels",
+          "ok": true,
+          "detail": "V VaaniAgent interruptible intelligence Voice lab Demo Evaluation Live sandbox Rime TTS DATAFORGE 2026 · INDIA-FIRST VO"
+        },
+        {
+          "step": "refine",
+          "ok": true,
+          "detail": "h. Try the demo · Find hotels in Delhi under ₹5000 Actually, only vegetarian and near a metro What are you searching for? What is Connaught Place? Forget it Find restaurants in Connaught Place instead"
+        },
+        {
+          "step": "follow-up-cheaper",
+          "ok": true
+        },
+        {
+          "step": "pivot-restaurants",
+          "ok": true,
+          "detail": "h. Try the demo · Find hotels in Delhi under ₹5000 Actually, only vegetarian and near a metro What are you searching for? What is Connaught Place? Forget it Find restaurants in Connaught Place instead"
+        },
+        {
+          "step": "constraint-chip-remove",
+          "ok": true,
+          "detail": "city Delhi ×"
+        },
+        {
+          "step": "debug-panel",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "demo-refine-smoke",
+      "ok": true
+    },
+    {
+      "name": "mic-presence",
+      "ok": true
+    }
+  ],
+  "failures": [],
+  "ok": true,
+  "finishedAt": "2026-09-08T14:15:28.019Z"
+}

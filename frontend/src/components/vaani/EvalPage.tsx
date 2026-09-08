@@ -58,29 +58,48 @@ const typeStyles: Record<string, string> = {
   CANCEL: "border-destructive/25 bg-destructive/10 text-brand-rose",
   STATUS: "border-accent/25 bg-accent/10 text-brand-cyan",
   PIVOT: "border-brand-amber/25 bg-brand-amber/10 text-brand-amber",
+  FACT: "border-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan",
   STALE: "border-brand-rose/25 bg-brand-rose/10 text-brand-rose",
   MULTI: "border-brand-lime/25 bg-brand-lime/10 text-brand-lime",
   EDGE: "border-border bg-card text-foreground",
 };
 
-async function loadResults(): Promise<EvalResults> {
-  const bust = `t=${Date.now()}`;
-  const urls = [`/evaluation/results.json?${bust}`, `${API_BASE}/evaluate/results?${bust}`];
+type QaRow = {
+  scenario_id: string;
+  passed?: boolean;
+  interrupt_type?: string;
+  note?: string;
+  latency_ms?: number;
+};
 
+async function loadJson<T>(paths: string[]): Promise<T> {
   let lastError: Error | null = null;
-  for (const url of urls) {
+  for (const url of paths) {
     try {
       const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) {
         lastError = new Error(`${url} → ${response.status}`);
         continue;
       }
-      return (await response.json()) as EvalResults;
+      return (await response.json()) as T;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
     }
   }
-  throw lastError ?? new Error("Could not load evaluation/results.json");
+  throw lastError ?? new Error("Could not load JSON");
+}
+
+async function loadResults(): Promise<EvalResults> {
+  const bust = `t=${Date.now()}`;
+  return loadJson([`/evaluation/results.json?${bust}`, `${API_BASE}/evaluate/results?${bust}`]);
+}
+
+async function loadQaIndependent(): Promise<QaRow[]> {
+  const bust = `t=${Date.now()}`;
+  return loadJson([
+    `/evaluation/qa_independent_results.json?${bust}`,
+    `${API_BASE}/evaluate/qa?${bust}`,
+  ]);
 }
 
 function formatGeneratedAt(iso: string) {
@@ -93,16 +112,19 @@ function formatGeneratedAt(iso: string) {
 
 export function EvalPage() {
   const [data, setData] = useState<EvalResults | null>(null);
+  const [qaRows, setQaRows] = useState<QaRow[]>([]);
+  const [tab, setTab] = useState<"harness" | "qa">("harness");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    loadResults()
-      .then((payload) => {
+    Promise.all([loadResults(), loadQaIndependent().catch(() => [] as QaRow[])])
+      .then(([payload, qa]) => {
         if (!cancelled) {
           setData(payload);
+          setQaRows(Array.isArray(qa) ? qa : []);
           setError(null);
         }
       })
@@ -122,6 +144,8 @@ export function EvalPage() {
 
   const passed = data?.passed ?? 0;
   const total = data?.scenario_count ?? 0;
+  const qaPassed = qaRows.filter((r) => r.passed).length;
+  const factRows = qaRows.filter((r) => (r.interrupt_type || "").toUpperCase() === "FACT");
 
   return (
     <main className="relative mx-auto min-h-screen max-w-[1440px] px-4 py-5 pb-16 sm:px-8 lg:px-12">
@@ -151,13 +175,36 @@ export function EvalPage() {
           transition={{ delay: 0.2, duration: 0.5 }}
           className="mt-4 max-w-2xl leading-7 text-muted-foreground"
         >
-          Live numbers from{" "}
-          <span className="font-mono text-foreground">evaluation/results.json</span>
+          Metrics from <span className="font-mono text-foreground">evaluation/results.json</span>
           {data?.generated_at ? <> · generated {formatGeneratedAt(data.generated_at)}</> : null}.
-          Re-run{" "}
-          <span className="font-mono text-foreground">python evaluation/compute_metrics.py</span> to
-          refresh — no copy-paste.
+          Independent pytest log:{" "}
+          <span className="font-mono text-foreground">qa_independent_results.json</span>
+          {factRows.length ? <> · {factRows.length} FACT rows</> : null}.
         </motion.p>
+        <div className="mt-5 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setTab("harness")}
+            className={`rounded-full px-4 py-2 text-xs font-semibold ${
+              tab === "harness"
+                ? "bg-primary text-primary-foreground"
+                : "border border-border text-muted-foreground"
+            }`}
+          >
+            Metrics harness
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("qa")}
+            className={`rounded-full px-4 py-2 text-xs font-semibold ${
+              tab === "qa"
+                ? "bg-primary text-primary-foreground"
+                : "border border-border text-muted-foreground"
+            }`}
+          >
+            QA independent ({qaPassed}/{qaRows.length || 0})
+          </button>
+        </div>
       </section>
 
       {loading ? (
@@ -177,7 +224,7 @@ export function EvalPage() {
         </div>
       ) : null}
 
-      {data ? (
+      {data && tab === "harness" ? (
         <>
           <div className="relative z-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {METRIC_ORDER.map(({ key, name }, i) => {
@@ -304,6 +351,72 @@ export function EvalPage() {
             re-running compute_metrics
           </footer>
         </>
+      ) : null}
+
+      {tab === "qa" ? (
+        <motion.section
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative z-10 overflow-hidden rounded-2xl border border-border bg-card/70 backdrop-blur-md"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5">
+            <div>
+              <h2 className="font-semibold">QA-independent pytest log</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                evaluation/qa_independent_results.json · includes FACT when present
+              </p>
+            </div>
+            <span className="rounded-full border border-brand-lime/30 bg-brand-lime/10 px-3 py-1.5 font-mono text-xs text-brand-lime">
+              {qaPassed}/{qaRows.length} passed
+            </span>
+          </div>
+          {!qaRows.length ? (
+            <p className="p-5 text-sm text-muted-foreground">
+              No QA file yet — run <code className="text-foreground">pytest tests/ -q</code> then
+              refresh.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-5 py-4 font-medium">ID</th>
+                    <th className="py-4 pr-4 font-medium">Interrupt</th>
+                    <th className="py-4 pr-4 font-medium">Note</th>
+                    <th className="px-5 py-4 font-medium">Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {qaRows.map((row) => (
+                    <tr key={row.scenario_id} className="border-b border-border/60 last:border-0">
+                      <td className="px-5 py-3 font-mono text-xs text-muted-foreground">
+                        {row.scenario_id}
+                      </td>
+                      <td className="py-3 pr-4">
+                        <span
+                          className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${
+                            typeStyles[(row.interrupt_type || "EDGE").toUpperCase()] ??
+                            typeStyles["EDGE"]
+                          }`}
+                        >
+                          {row.interrupt_type || "—"}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-4 text-muted-foreground">{row.note || "—"}</td>
+                      <td
+                        className={`px-5 py-3 text-xs font-semibold ${
+                          row.passed ? "text-brand-lime" : "text-brand-rose"
+                        }`}
+                      >
+                        {row.passed ? "PASS" : "FAIL"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </motion.section>
       ) : null}
     </main>
   );

@@ -1,7 +1,6 @@
 /**
  * Speak via Rime only (one voice).
- * Browser speechSynthesis is used ONLY if Rime fails — never as a "bridge",
- * so you don't hear a system voice then Luna a second later.
+ * No browser speechSynthesis bridge — keeps ack → result the same voice.
  */
 
 import { fetchRimeSpeech } from "@/lib/api";
@@ -25,15 +24,6 @@ function haltPlayback(): void {
   }
 }
 
-function speakBrowser(text: string, lang: ReplyLang = "en"): void {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = lang === "hi" ? "hi-IN" : "en-IN";
-  utterance.rate = 1.08;
-  window.speechSynthesis.speak(utterance);
-}
-
 export async function speakLine(
   text: string,
   handlers: SpeakHandlers = {},
@@ -45,10 +35,10 @@ export async function speakLine(
   const gen = ++speakGeneration;
   haltPlayback();
   handlers.onStart?.();
+  // Keep AudioContext unlocked across barge-in
   await unlockAudio();
   if (gen !== speakGeneration) return;
 
-  // UI-only waiting hint — do NOT speak with the browser (different voice from Rime)
   const waitTimer = window.setTimeout(() => {
     if (gen !== speakGeneration) return;
     handlers.onWaiting?.();
@@ -66,8 +56,7 @@ export async function speakLine(
     window.clearTimeout(waitTimer);
     if (gen !== speakGeneration) return;
     handlers.onError?.(err instanceof Error ? err.message : "TTS failed");
-    // Last resort only — same message, system voice
-    speakBrowser(line, replyLang);
+    // No browser bridge — same Rime voice only; show text / errTts in UI
     handlers.onDone?.();
   }
 }

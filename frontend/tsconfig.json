@@ -5,9 +5,13 @@
     "jsx": "react-jsx",
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+
+    /* Do not pin "types": ["vite/client"] — that blocks package .d.ts (lucide-react, framer-motion).
+       vite/client is pulled in via src/vite-env.d.ts instead. */
 
     "moduleResolution": "Bundler",
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": false,
     "noEmit": true,
