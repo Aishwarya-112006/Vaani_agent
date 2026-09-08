@@ -17,6 +17,7 @@ import {
   constraintChipLabel,
   errNetwork,
   errSttEmpty,
+  errSttFailed,
   errTts,
   factFallback,
   FOLLOW_UP_CHIPS,
@@ -296,6 +297,7 @@ export function VoiceAgent() {
   const [phase, setPhase] = useState<PipelinePhase>("idle");
   const [phaseDetail, setPhaseDetail] = useState<string | undefined>();
   const [bannerError, setBannerError] = useState<string | null>(null);
+  const [sttDegraded, setSttDegraded] = useState(false);
   const [replyLang, setReplyLang] = useState<ReplyLang>("en");
   const [preferredCity, setPreferredCity] = useState("Delhi");
   const [cityConfirmed, setCityConfirmed] = useState(false);
@@ -327,6 +329,7 @@ export function VoiceAgent() {
     interrupt: Interrupt | null;
   } | null>(null);
   const cityConfirmedRef = useRef(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const ackStartedAtRef = useRef<number | null>(null);
   const [latency, setLatency] = useState<{
     toolDelaySec?: number | null;
@@ -855,7 +858,7 @@ export function VoiceAgent() {
       if (!cityConfirmedRef.current) {
         applyCity("Delhi", { speak: false });
       }
-      let cancelled = false;
+      const cancelled = false;
       const timersLocal: number[] = [];
       demo.steps.forEach((step) => {
         const id = window.setTimeout(() => {
@@ -1064,6 +1067,16 @@ export function VoiceAgent() {
             }
           />
 
+          {sttDegraded ? (
+            <div
+              role="status"
+              className="mt-3 rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs text-foreground"
+            >
+              Mic STT unavailable — <span className="font-semibold">type below</span> to continue
+              the demo. Rime TTS still works.
+            </div>
+          ) : null}
+
           {bannerError ? (
             <div
               role="alert"
@@ -1242,7 +1255,8 @@ export function VoiceAgent() {
                 setTurns((x) => [...x, { role: "user", text: spoken, time: now() }]);
                 pushLog("turn", `USER · ${spoken} (voice/STT)`);
 
-                const type = (interrupt_type as Interrupt | null) || classifyInterrupt(spoken, task);
+                const type =
+                  (interrupt_type as Interrupt | null) || classifyInterrupt(spoken, task);
                 setInterrupt(type);
 
                 if (type === "FACT") {
@@ -1339,13 +1353,25 @@ export function VoiceAgent() {
                 runTool(next, n, kind);
               }}
               onError={(message) => {
-                // Mic/recording errors are not network failures
+                const sttDown =
+                  /STT|type karke|Speech-to-text|Access denied|Groq/i.test(message) ||
+                  message === errSttFailed();
+                if (sttDown) {
+                  setSttDegraded(true);
+                  setBannerError(message);
+                  setPipeline("idle");
+                  pushLog("stale", message);
+                  addAssistant(message);
+                  window.setTimeout(() => inputRef.current?.focus(), 50);
+                  return;
+                }
                 failLoud(message);
               }}
             />
 
             <div className="mt-5 flex w-full gap-2">
               <input
+                ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onFocus={() => {

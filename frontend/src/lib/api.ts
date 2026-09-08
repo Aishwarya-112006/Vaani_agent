@@ -71,6 +71,21 @@ export async function sendTextMessage(
   return (await response.json()) as MessageResponse;
 }
 
+/** Pull FastAPI `{detail}` / status into a short Error message. */
+async function errorFromResponse(response: Response, fallback: string): Promise<Error> {
+  const status = response.status;
+  let detail = await response.text();
+  try {
+    const parsed = JSON.parse(detail) as { detail?: string };
+    if (parsed?.detail) detail = String(parsed.detail);
+  } catch {
+    /* keep raw */
+  }
+  const err = new Error(detail || fallback);
+  (err as Error & { status?: number }).status = status;
+  return err;
+}
+
 export async function sendAudioMessage(sessionId: string, blob: Blob): Promise<MessageResponse> {
   const form = new FormData();
   form.append("session_id", sessionId);
@@ -82,8 +97,7 @@ export async function sendAudioMessage(sessionId: string, blob: Blob): Promise<M
   });
 
   if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || `Failed to send audio (${response.status})`);
+    throw await errorFromResponse(response, `Failed to send audio (${response.status})`);
   }
 
   return (await response.json()) as MessageResponse;

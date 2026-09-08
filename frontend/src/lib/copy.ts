@@ -276,7 +276,16 @@ export function errShortClip(): string {
 }
 
 export function errSttEmpty(): string {
-  return "Samajh nahi paayi. Ek baar aur bolo?";
+  return "Samajh nahi paayi. Ek baar aur bolo — ya neeche type karo.";
+}
+
+/** Groq/network STT failure — keep demo alive via typed input. */
+export function errSttFailed(): string {
+  return "Mic STT nahi chal paya (Groq/network). Neeche type karke continue karo — Rime voice phir bhi chalega.";
+}
+
+export function errSttBusy(): string {
+  return "Voice STT busy hai — thodi der baad mic try karo, ya abhi type karo.";
 }
 
 export function errNetwork(detail?: string): string {

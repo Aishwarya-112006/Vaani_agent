@@ -10,7 +10,11 @@
 
 Copy `backend/.env.example` → `backend/.env`. Frontend: `pnpm dev` on `:8080`. Backend: `pnpm dev` in `/backend` on `:8000`.
 
-**Honest note:** Hotel / restaurant **results are mock inventory** (Lotus Residency, etc.). Interrupt fencing, STT, TTS, and Wikipedia FACT are real.
+**Honest note:** Hotel / restaurant **results are city-aware mock inventory** (not live Maps). Interrupt fencing, STT, TTS, and Wikipedia FACT are real.
+
+**If mic STT fails** (Groq 403/network): a banner appears — **type** the same lines below. Rime TTS still works.
+
+**If STT is slow or throttled:** set `GROQ_STT_MODEL=whisper-large-v3-turbo` in `backend/.env` and restart the backend. No chat-model fallback is needed — the live `/message` path classifies interrupts with rules, not an LLM.
 
 ---
 
