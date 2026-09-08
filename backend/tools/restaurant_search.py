@@ -165,11 +165,27 @@ def parse_restaurant_params(
     if re.search(r"non[- ]?veg|any food|nonveg", s):
         veg_only = False
 
+    same_city_only = bool(
+        re.search(r"\bsame\b.*\b(but|in|for)\b|\bsame\s+search\b|\bbut\s+in\s+\w+", s)
+    )
+    if same_city_only and prev:
+        resolved_city = city or prev.get("city") or (default_city.strip() if default_city else None)
+        return {
+            "city": resolved_city,
+            "cuisine": prev.get("cuisine") or "Indian",
+            "veg_only": bool(prev.get("veg_only", False)),
+            "area": prev.get("area") or "Connaught Place",
+            "city_required": resolved_city is None,
+        }
+
+    resolved_city = city or prev.get("city") or (default_city.strip() if default_city else None)
+
     return {
-        "city": city or prev.get("city") or default_city or "Delhi",
+        "city": resolved_city,
         "cuisine": cuisine or prev.get("cuisine") or "Indian",
         "veg_only": bool(veg_only),
         "area": area or prev.get("area") or "Connaught Place",
+        "city_required": resolved_city is None,
     }
 
 
@@ -261,20 +277,19 @@ async def search_restaurants(
     top = [{k: v for k, v in r.items() if not k.startswith("_")} for r in results[:3]]
 
     picks = ", ".join(f"{h['name']}" for h in top)
-    if reply_lang == "hi":
-        summary = (
-            f"{area_name}, {city_name} — {len(top)} restaurants"
-            + (f", {cuisine_name}" if cuisine_name else "")
-            + (" · veg" if veg_only else "")
-            + f". {picks}."
+    contrast = ""
+    if len(top) >= 2:
+        a, b = top[0], top[1]
+        contrast = (
+            f" Compare: {a['name']} ₹{a['price_for_two']}/2 vs {b['name']} ₹{b['price_for_two']}/2."
         )
-    else:
-        summary = (
-            f"{area_name}, {city_name} — {len(top)} restaurants"
-            + (f", {cuisine_name}" if cuisine_name else "")
-            + (" · veg" if veg_only else "")
-            + f". {picks}."
-        )
+
+    summary = (
+        f"{area_name}, {city_name} — {len(top)} restaurants"
+        + (f", {cuisine_name}" if cuisine_name else "")
+        + (" · veg" if veg_only else "")
+        + f". {picks}.{contrast}"
+    )
 
     payload = {
         "tool": "search_restaurants",

@@ -29,6 +29,14 @@ export function SiteHeader({ tagline }: { tagline: string }) {
           Voice lab
         </Link>
         <Link
+          to="/demo"
+          activeProps={{ className: "bg-primary text-primary-foreground" }}
+          inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}
+          className="rounded-full px-4 py-2 transition-colors"
+        >
+          Demo
+        </Link>
+        <Link
           to="/evaluate"
           activeProps={{ className: "bg-primary text-primary-foreground" }}
           inactiveProps={{ className: "text-muted-foreground hover:text-foreground" }}

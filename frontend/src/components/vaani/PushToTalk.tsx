@@ -31,6 +31,8 @@ type PushToTalkProps = {
   onBusyChange?: (busy: boolean) => void;
   onSent?: (result: PushToTalkSent) => void;
   onError?: (message: string) => void;
+  /** Called when mic starts — parent should stopSpeaking() for barge-in */
+  onBargeIn?: () => void;
 };
 
 /**
@@ -49,6 +51,7 @@ export function PushToTalk({
   onBusyChange,
   onSent,
   onError,
+  onBargeIn,
 }: PushToTalkProps) {
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -71,6 +74,7 @@ export function PushToTalk({
   const onBusyChangeRef = useRef(onBusyChange);
   const onSentRef = useRef(onSent);
   const onErrorRef = useRef(onError);
+  const onBargeInRef = useRef(onBargeIn);
 
   sessionIdRef.current = sessionId;
   disabledRef.current = disabled;
@@ -78,6 +82,7 @@ export function PushToTalk({
   onBusyChangeRef.current = onBusyChange;
   onSentRef.current = onSent;
   onErrorRef.current = onError;
+  onBargeInRef.current = onBargeIn;
 
   const setIsRecording = useCallback((next: boolean) => {
     recordingRef.current = next;
@@ -290,6 +295,8 @@ export function PushToTalk({
     if (recordingRef.current) {
       stopRecording();
     } else {
+      // Barge-in: stop TTS but keep AudioContext unlocked
+      onBargeInRef.current?.();
       void startRecording();
     }
   }, [startRecording, stopRecording]);

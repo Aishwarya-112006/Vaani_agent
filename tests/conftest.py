@@ -52,7 +52,12 @@ async def session_id(client):
 
 
 async def send_text(client, session_id, text, interrupt_type=None):
-    """Helper: POST /message with a text field (no audio -> no STT/Groq call)."""
+    """Helper: POST /message with a text field (no audio -> no STT/Groq call).
+
+    E2: Do NOT pass interrupt_type in normal scenarios — the backend must
+    classify from text. Only pass interrupt_type for explicit override tests
+    (none of the scored suite should feed it).
+    """
     data = {"session_id": session_id, "text": text}
     if interrupt_type:
         data["interrupt_type"] = interrupt_type

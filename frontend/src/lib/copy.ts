@@ -72,7 +72,11 @@ export function searchFiller(tick: number, lang: ReplyLang = "en"): string {
 export type ConstraintKey = "city" | "budget" | "veg" | "metro" | "cuisine" | "area";
 
 /** Human label for an active filter chip (UI). */
-export function constraintChipLabel(key: ConstraintKey, value: string, lang: ReplyLang = "en"): string {
+export function constraintChipLabel(
+  key: ConstraintKey,
+  value: string,
+  lang: ReplyLang = "en",
+): string {
   switch (key) {
     case "city":
       return value;
@@ -178,6 +182,89 @@ export function resultRestaurants(place: string, lang: ReplyLang = "en"): string
     return `${place} — 3 restaurants. Saffron Thali, Coastal Catch, Green Bowl.`;
   }
   return `${place} — 3 restaurants. Saffron Thali, Coastal Catch, Green Bowl.`;
+}
+
+/** Short TTS fallback when BE summary is missing (uses live result names when present). */
+export function resultFallbackFromTool(
+  result: {
+    tool?: string;
+    count?: number;
+    results?: unknown[];
+    params?: Record<string, unknown>;
+  },
+  lang: ReplyLang = "en",
+): string {
+  const params = result.params ?? {};
+  const city = String(params["city"] ?? "Delhi");
+  const rows = Array.isArray(result.results) ? result.results : [];
+  const names = rows
+    .slice(0, 3)
+    .map((r) =>
+      r && typeof r === "object" && "name" in r ? String((r as { name: unknown }).name) : "",
+    )
+    .filter(Boolean);
+
+  if (result.tool === "search_restaurants") {
+    const place = String(params["area"] ?? city);
+    if (names.length) {
+      const contrast =
+        names.length >= 2
+          ? lang === "hi"
+            ? ` Compare: ${names[0]} vs ${names[1]}.`
+            : ` Compare: ${names[0]} vs ${names[1]}.`
+          : "";
+      return lang === "hi"
+        ? `${place} — ${names.length} restaurants. ${names.join(", ")}.${contrast}`
+        : `${place} — ${names.length} restaurants. ${names.join(", ")}.${contrast}`;
+    }
+    return resultRestaurants(place, lang);
+  }
+
+  const budget = String(params["budget"] ?? "5000");
+  if (names.length) {
+    const prices = rows
+      .slice(0, 2)
+      .map((r) => {
+        if (r && typeof r === "object" && "price_inr" in r) {
+          return `${(r as { name?: string }).name} ₹${(r as { price_inr?: number }).price_inr}`;
+        }
+        return "";
+      })
+      .filter(Boolean);
+    const contrast = prices.length >= 2 ? ` Compare: ${prices[0]} vs ${prices[1]}.` : "";
+    return lang === "hi"
+      ? `${city}, ${budget} ke under — ${names.length} hotels. ${names.join(", ")}.${contrast}`
+      : `${city}, under ${budget} — ${names.length} hotels. ${names.join(", ")}.${contrast}`;
+  }
+  return resultHotels(city, budget, lang);
+}
+
+export function askCity(lang: ReplyLang = "en"): string {
+  return lang === "hi" ? "Kaunsa city?" : "Which city should I search?";
+}
+
+export function askBudget(lang: ReplyLang = "en"): string {
+  return lang === "hi"
+    ? "Budget kitna? Jaise under 5000."
+    : "What's your budget? For example, under 5000.";
+}
+
+export const FOLLOW_UP_CHIPS = [
+  { id: "cheaper", label: "Cheaper?", utterance: "Actually, under 3000 only" },
+  { id: "metro", label: "Metro?", utterance: "Near a metro please" },
+  { id: "veg", label: "Veg?", utterance: "Only vegetarian" },
+  { id: "restaurants", label: "Restaurants?", utterance: "Find restaurants there instead" },
+  { id: "book", label: "Book first?", utterance: "Book the first one" },
+  { id: "same-city", label: "Same · Mumbai", utterance: "Same search but in Mumbai" },
+] as const;
+
+export function mockBookFirst(name: string, place: string, lang: ReplyLang = "en"): string {
+  const n = name.trim() || "the top pick";
+  const p = place.trim() || "your city";
+  if (lang === "hi") {
+    return `Theek hai — ${n} (${p}) ke liye mock booking hold. Confirm email bhej dungi.`;
+  }
+  return `Got it — mock hold on ${n} in ${p}. I'll pretend we emailed a confirmation.`;
 }
 
 export function errMic(): string {

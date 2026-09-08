@@ -72,12 +72,14 @@ def _cors_origins() -> list[str]:
 
 app = FastAPI(title="VaaniAgent")
 
+_CORS = _cors_origins()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins(),
+    allow_origins=_CORS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+logger.info("CORS allow_origins=%s (set CORS_ORIGINS for deploy — D1)", _CORS)
 
 
 class ConnectionManager:
@@ -270,6 +272,7 @@ def _resolve_tool_kind(
 
 
 def _classify_interrupt(text: str, state: ConversationState) -> Optional[str]:
+    """Keep keyword families in sync with frontend `lib/interrupt.ts` (C1 / H2)."""
     s = (text or "").lower()
     if re.search(r"what are you|are you still|how long|status", s):
         return "STATUS"
@@ -312,7 +315,8 @@ async def create_session_route(request: Request):
 
     city = str(geo.get("city") or DEFAULT_CITY)
     state.detected_city = city
-    state.preferred_city = city
+    # Do not invent preferred_city — FE confirms via /city (Yes / Change)
+    state.preferred_city = None
     greeting = greeting_for_city(city, lang="en")
 
     log_event("session_created", session_id=session_id)
@@ -462,6 +466,11 @@ async def handle_message(
     prev = prev_params if isinstance(prev_params, dict) else None
     tool_kind = _resolve_tool_kind(text or "", state, classified)
     same_kind = str(state.current_task.get("type", "")) == tool_kind
+    # Prefer confirmed city, else detected (geo) — never hardcode Delhi when both empty
+    default_city = (
+        (getattr(state, "preferred_city", None) or getattr(state, "detected_city", None) or "")
+        .strip()
+    )
 
     if tool_kind == "restaurant":
         merge_from = (
@@ -472,8 +481,21 @@ async def handle_message(
         tool_params = parse_restaurant_params(
             text or "",
             merge_from,
-            default_city=getattr(state, "preferred_city", None) or DEFAULT_CITY,
+            default_city=default_city,
         )
+        if tool_params.get("city_required") or not tool_params.get("city"):
+            state.tool_status = "IDLE"
+            state.active_request_id = None
+            state.tool_future = None
+            await manager.broadcast_state(session_id, state)
+            return MessageResponse(
+                status="need_city",
+                turn_id=state.turn_id,
+                interrupt_type=classified,
+                transcript=transcript or text,
+                reply_lang=state.reply_lang,
+                need_city=True,
+            )
         state.current_task = {
             "type": "restaurant",
             "tool": "search_restaurants",
@@ -494,8 +516,22 @@ async def handle_message(
         tool_params = parse_hotel_params(
             text or "",
             merge_from,
-            default_city=getattr(state, "preferred_city", None) or DEFAULT_CITY,
+            default_city=default_city,
         )
+        if tool_params.get("city_required") or not tool_params.get("city"):
+            state.tool_status = "IDLE"
+            state.active_request_id = None
+            state.tool_future = None
+            await manager.broadcast_state(session_id, state)
+            return MessageResponse(
+                status="need_city",
+                turn_id=state.turn_id,
+                interrupt_type=classified,
+                transcript=transcript or text,
+                reply_lang=state.reply_lang,
+                need_city=True,
+            )
+        # Budget ask is FE-only (optional). Default budget=5000 keeps tools interruptible in tests.
         state.current_task = {
             "type": "hotel",
             "tool": "search_hotels",

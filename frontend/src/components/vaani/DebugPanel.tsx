@@ -8,6 +8,11 @@ type Tone = "violet" | "lime" | "amber" | "cyan" | "rose" | "muted";
 type DebugPanelProps = {
   state: AgentState | null;
   connected: boolean;
+  /** Optional client-measured timings (B9) */
+  latency?: {
+    toolDelaySec?: number | null;
+    lastAckToCompleteMs?: number | null;
+  };
 };
 
 function toneForStatus(status: string): Tone {
@@ -19,14 +24,24 @@ function toneForStatus(status: string): Tone {
 
 /**
  * Live judge / debug panel.
- * All five fields are driven exclusively by WebSocket AgentState — no local mocks.
+ * Core fields from WebSocket AgentState; optional latency badges from tool result.
  */
-export function DebugPanel({ state, connected }: DebugPanelProps) {
+export function DebugPanel({ state, connected, latency }: DebugPanelProps) {
   const turnId = state ? String(state.turn_id) : "—";
   const requestId = state?.active_request_id || "—";
   const toolStatus = state?.tool_status ?? "—";
   const interrupt = state?.last_interrupt_type || "—";
   const stale = state ? String(state.stale_discarded) : "—";
+  const toolMs =
+    typeof latency?.toolDelaySec === "number"
+      ? `${Math.round(latency.toolDelaySec * 1000)} ms`
+      : typeof state?.last_tool_result?.delay_seconds === "number"
+        ? `${Math.round(state.last_tool_result.delay_seconds * 1000)} ms`
+        : "—";
+  const ackGap =
+    typeof latency?.lastAckToCompleteMs === "number"
+      ? `${Math.round(latency.lastAckToCompleteMs)} ms`
+      : "—";
 
   return (
     <aside className="glass-card h-fit p-5">
@@ -53,6 +68,8 @@ export function DebugPanel({ state, connected }: DebugPanelProps) {
         <Metric label="tool_status" value={toolStatus} tone={toneForStatus(toolStatus)} />
         <Metric label="interrupt_type" value={interrupt} tone="cyan" />
         <Metric label="stale_discarded" value={stale} tone="amber" />
+        <Metric label="tool_delay" value={toolMs} tone="lime" />
+        <Metric label="ack→complete" value={ackGap} tone="muted" />
       </div>
 
       {!connected && (

@@ -10,6 +10,8 @@ import {
   ackRefine,
   ackSearch,
   ackStatus,
+  askBudget,
+  askCity,
   CITY_CHIPS,
   confirmCity,
   constraintChipLabel,
@@ -17,8 +19,11 @@ import {
   errSttEmpty,
   errTts,
   factFallback,
+  FOLLOW_UP_CHIPS,
   greetCity,
+  mockBookFirst,
   phaseLabel,
+  resultFallbackFromTool,
   resultHotels,
   resultRestaurants,
   searchFiller,
@@ -26,8 +31,10 @@ import {
   type PipelinePhase,
   type ReplyLang,
 } from "@/lib/copy";
+import { JUDGE_DEMOS, type JudgeDemo } from "@/lib/demos";
 import { speakLine, stopSpeaking } from "@/lib/speak";
 import { detectReplyLang } from "@/lib/lang";
+import { classifyInterrupt } from "@/lib/interrupt";
 import { useWebSocket, type ToolResult } from "@/hooks/useWebSocket";
 
 import { Backdrop } from "./backdrop";
@@ -118,23 +125,6 @@ function now() {
   return new Date().toLocaleTimeString([], { hour12: false });
 }
 
-function classify(text: string, task: Task | null): Interrupt | null {
-  const s = text.toLowerCase();
-  if (/what are you|are you still|how long|status/.test(s)) return "STATUS";
-  // Side-question (Wikipedia) — do not fence search
-  if (/\b(what is|tell me about|who is|kya hai|kya hota)\b|\bbatao\b/.test(s)) return "FACT";
-  if (/forget it|never mind|stop searching|cancel|stop it/.test(s)) return "CANCEL";
-  if (
-    task &&
-    ((task.type === "hotel" && /restaurant|food|eat|dinner|cafe|cuisine|thali|lunch/.test(s)) ||
-      (task.type === "restaurant" && /\bhotels?\b|\bstay\b|\broom\b/.test(s)))
-  )
-    return "PIVOT";
-  if (task && /actually|only|vegetarian|veg|under|metro|near|rupees|₹|cuisine|area/.test(s))
-    return "REFINE";
-  return null;
-}
-
 function resolveTaskType(text: string, previous?: Task | null): Task["type"] {
   const s = text.toLowerCase();
   const restaurant = /restaurant|food|eat|dinner|cafe|cuisine|thali|lunch|breakfast/.test(s);
@@ -167,7 +157,10 @@ const PARAM_TO_CONSTRAINT: Record<string, ConstraintKey> = {
 };
 
 function splitParams(params: string): string[] {
-  return params.split(" · ").map((p) => p.trim()).filter(Boolean);
+  return params
+    .split(" · ")
+    .map((p) => p.trim())
+    .filter(Boolean);
 }
 
 function paramsToChips(params: string, lang: ReplyLang): ConstraintChip[] {
@@ -233,6 +226,17 @@ function parseTask(text: string, previous?: Task | null, defaultCity = "Delhi"):
     "Indian",
   ].find((x) => s.includes(x.toLowerCase()));
 
+  // B7: same search, new city — keep previous filters
+  if (previous && /\bsame\b.*\b(but|in|for)\b|\bsame\s+search\b/.test(s) && city) {
+    const parts = splitParams(previous.params).filter((p) => !p.startsWith("city="));
+    parts.unshift(`city=${city}`);
+    return {
+      type: previous.type,
+      params: parts.join(" · "),
+      tool_call_id: Math.random().toString(16).slice(2, 10),
+    };
+  }
+
   const values = [
     city ? `city=${city}` : "",
     area ? `area=${area}` : "",
@@ -259,16 +263,18 @@ function parseTask(text: string, previous?: Task | null, defaultCity = "Delhi"):
   }
 
   if (!merged.some((x) => x.startsWith("city="))) {
-    merged.unshift(`city=${defaultCity}`);
+    const city = (defaultCity || "").trim();
+    if (city) merged.unshift(`city=${city}`);
+  }
+
+  // Defaults for restaurant area/cuisine when starting fresh without prior params
+  if (type === "restaurant" && merged.length === 0) {
+    merged.push("area=Connaught Place", "cuisine=Indian");
   }
 
   return {
     type,
-    params:
-      merged.join(" · ") ||
-      (type === "hotel"
-        ? `city=${defaultCity}`
-        : `city=${defaultCity} · area=Connaught Place · cuisine=Indian`),
+    params: merged.join(" · "),
     tool_call_id: Math.random().toString(16).slice(2, 10),
   };
 }
@@ -292,6 +298,9 @@ export function VoiceAgent() {
   const [bannerError, setBannerError] = useState<string | null>(null);
   const [replyLang, setReplyLang] = useState<ReplyLang>("en");
   const [preferredCity, setPreferredCity] = useState("Delhi");
+  const [cityConfirmed, setCityConfirmed] = useState(false);
+  const [pendingAsk, setPendingAsk] = useState<"city" | "budget" | null>(null);
+  const [demoRunning, setDemoRunning] = useState<string | null>(null);
   const [cityPrompt, setCityPrompt] = useState<{
     open: boolean;
     changing: boolean;
@@ -310,8 +319,19 @@ export function VoiceAgent() {
   const pendingResultRef = useRef(false);
   const spokenRequestRef = useRef<string | null>(null);
   const taskRef = useRef<Task | null>(null);
+  const lastResultRef = useRef<ToolResult | null>(null);
   const replyLangRef = useRef<ReplyLang>("en");
-  const preferredCityRef = useRef("Delhi");
+  const preferredCityRef = useRef("");
+  const pendingDraftRef = useRef<{
+    task: Task;
+    interrupt: Interrupt | null;
+  } | null>(null);
+  const cityConfirmedRef = useRef(false);
+  const ackStartedAtRef = useRef<number | null>(null);
+  const [latency, setLatency] = useState<{
+    toolDelaySec?: number | null;
+    lastAckToCompleteMs?: number | null;
+  }>({});
 
   const setLang = useCallback((next: ReplyLang) => {
     replyLangRef.current = next;
@@ -357,7 +377,9 @@ export function VoiceAgent() {
     (city: string, opts?: { speak?: boolean }) => {
       const name = city.trim() || "Delhi";
       preferredCityRef.current = name;
+      cityConfirmedRef.current = true;
       setPreferredCity(name);
+      setCityConfirmed(true);
       setCityPrompt((p) => ({ ...p, open: false, changing: false }));
       if (session && session !== "pending") {
         void setSessionCity(session, name).catch(() => {
@@ -394,7 +416,9 @@ export function VoiceAgent() {
             ),
           onPlaying: () => setPipeline("speaking"),
           onDone: () => {
+            // Honest searching pulse starts after ack TTS finishes (not during ack)
             if (toolRunningRef.current) {
+              startSearchPulse();
               setPipeline("searching", searchFiller(searchTick.current, replyLangRef.current));
             } else {
               setPipeline("idle");
@@ -403,12 +427,18 @@ export function VoiceAgent() {
           onError: (message) => {
             pushLog("stale", `TTS · ${message}`);
             setBannerError(errTts());
+            if (toolRunningRef.current) {
+              startSearchPulse();
+              setPipeline("searching", searchFiller(searchTick.current, replyLangRef.current));
+            } else {
+              setPipeline("idle");
+            }
           },
         },
         replyLangRef.current,
       );
     },
-    [pushLog, setPipeline],
+    [pushLog, setPipeline, startSearchPulse],
   );
 
   const addAssistant = useCallback(
@@ -434,6 +464,9 @@ export function VoiceAgent() {
     const lang = asReplyLang(result.reply_lang ?? replyLangRef.current);
     if (typeof result.summary === "string" && result.summary.trim()) {
       return result.summary.trim();
+    }
+    if (result.results?.length || result.count) {
+      return resultFallbackFromTool(result, lang);
     }
     const params = result.params ?? {};
     const city = String(
@@ -469,6 +502,17 @@ export function VoiceAgent() {
         "tool",
         `COMPLETE ${result.tool ?? taskRef.current?.type ?? "tool"} · ${source} result → Rime`,
       );
+      lastResultRef.current = result;
+      if (typeof result.delay_seconds === "number") {
+        setLatency((prev) => ({ ...prev, toolDelaySec: result.delay_seconds ?? null }));
+      }
+      if (ackStartedAtRef.current != null) {
+        setLatency((prev) => ({
+          ...prev,
+          lastAckToCompleteMs: Date.now() - ackStartedAtRef.current!,
+        }));
+        ackStartedAtRef.current = null;
+      }
       addAssistant(lineFromToolResult(result, taskRef.current));
     },
     [addAssistant, clearLocalTimers, clearSearchPulse, lineFromToolResult, pushLog, setLang],
@@ -496,15 +540,16 @@ export function VoiceAgent() {
             : ackSearch(next.type, next.params, lang);
 
       setPipeline("acknowledging", ack);
+      ackStartedAtRef.current = Date.now();
       addAssistant(ack);
-      startSearchPulse();
+      // Searching pulse starts after ack TTS (see speak onDone) — honest gap
 
       // Fallback if WebSocket / backend result never arrives
       const fallbackId = window.setTimeout(() => {
         if (nextTurn !== currentTurn.current) return;
         if (!pendingResultRef.current) return;
         const p = next.params;
-        const city = p.match(/city=([^ ·]+)/)?.[1] || "Delhi";
+        const city = p.match(/city=([^ ·]+)/)?.[1] || preferredCityRef.current || "Delhi";
         const budget = p.match(/budget=(\d+)/)?.[1] || "5000";
         const synthetic: ToolResult = {
           tool: next.type === "restaurant" ? "search_restaurants" : "search_hotels",
@@ -519,7 +564,7 @@ export function VoiceAgent() {
       }, 4200);
       timers.current.push(fallbackId);
     },
-    [addAssistant, clearLocalTimers, completeFromBackend, pushLog, setPipeline, startSearchPulse],
+    [addAssistant, clearLocalTimers, completeFromBackend, pushLog, setPipeline],
   );
 
   const cancelLocal = useCallback(() => {
@@ -573,17 +618,112 @@ export function VoiceAgent() {
     (raw: string) => {
       const text = raw.trim();
       if (!text) return;
+      stopSpeaking();
+      void unlockAudio();
       setInput("");
       setTurns((x) => [...x, { role: "user", text, time: now() }]);
       pushLog("turn", `USER · ${text}`);
       setPipeline("understanding");
-
-      // Apply language immediately so ack/TTS match the typed utterance
       setLang(detectReplyLang(text, replyLangRef.current));
 
-      const type = classify(text, task);
+      // Resume after city / budget ask
+      if (pendingAsk === "city" || pendingAsk === "budget") {
+        const draft = pendingDraftRef.current;
+        if (draft) {
+          if (pendingAsk === "city") {
+            const cityHit = CITY_CHIPS.find((c) => text.toLowerCase().includes(c.toLowerCase()));
+            const name =
+              cityHit ||
+              text
+                .replace(/^(in|near|at)\s+/i, "")
+                .trim()
+                .split(/[\s,]/)[0];
+            if (name && name.length > 1) {
+              preferredCityRef.current = name;
+              cityConfirmedRef.current = true;
+              setPreferredCity(name);
+              setCityConfirmed(true);
+              if (session && session !== "pending") {
+                void setSessionCity(session, name).catch(() => undefined);
+              }
+              const withCity: Task = {
+                ...draft.task,
+                params: [
+                  `city=${name}`,
+                  ...splitParams(draft.task.params).filter((p) => !p.startsWith("city=")),
+                ].join(" · "),
+                tool_call_id: Math.random().toString(16).slice(2, 10),
+              };
+              pendingDraftRef.current = { task: withCity, interrupt: draft.interrupt };
+              setPendingAsk(null);
+              if (
+                withCity.type === "hotel" &&
+                !/\bbudget=/.test(withCity.params) &&
+                draft.interrupt !== "REFINE" &&
+                draft.interrupt !== "PIVOT"
+              ) {
+                setPendingAsk("budget");
+                addAssistant(askBudget(replyLangRef.current));
+                return;
+              }
+              pendingDraftRef.current = null;
+              currentTurn.current += 1;
+              const n = currentTurn.current;
+              setTurnId(n);
+              setInterrupt(draft.interrupt);
+              if (session && session !== "pending") {
+                void sendTextMessage(session, text, draft.interrupt).catch(() => undefined);
+              }
+              runTool(withCity, n, draft.interrupt);
+              return;
+            }
+          }
+          if (pendingAsk === "budget") {
+            const budget = text.match(/(\d{3,5})/)?.[1];
+            if (budget) {
+              const withBudget: Task = {
+                ...draft.task,
+                params: [
+                  ...splitParams(draft.task.params).filter((p) => !p.startsWith("budget=")),
+                  `budget=${budget}`,
+                ].join(" · "),
+                tool_call_id: Math.random().toString(16).slice(2, 10),
+              };
+              pendingDraftRef.current = null;
+              setPendingAsk(null);
+              currentTurn.current += 1;
+              const n = currentTurn.current;
+              setTurnId(n);
+              setInterrupt(draft.interrupt);
+              if (session && session !== "pending") {
+                void sendTextMessage(session, `under ${budget}`, draft.interrupt).catch(
+                  () => undefined,
+                );
+              }
+              runTool(withBudget, n, draft.interrupt);
+              return;
+            }
+          }
+        }
+      }
 
-      // FACT: ask backend for Wikipedia summary; never fence / start a new tool
+      const type = classifyInterrupt(text, task);
+
+      // B10: mock book first after COMPLETE
+      if (
+        (status === "COMPLETE" || lastResultRef.current) &&
+        /book (the )?first|book it|confirm (the )?booking|mock book/i.test(text)
+      ) {
+        const result = lastResultRef.current;
+        const rows = Array.isArray(result?.results) ? result!.results! : [];
+        const first = rows[0] as { name?: string; city?: string; area?: string } | undefined;
+        const name = first?.name || "the top pick";
+        const place = String(first?.area || first?.city || preferredCityRef.current || "Delhi");
+        addAssistant(mockBookFirst(name, place, replyLangRef.current));
+        pushLog("turn", "BOOK · mock hold on first result");
+        return;
+      }
+
       if (type === "FACT") {
         setInterrupt("FACT");
         pushLog("interrupt", "FACT · search continues (Wikipedia aside)");
@@ -604,17 +744,12 @@ export function VoiceAgent() {
         return;
       }
 
-      if (session && session !== "pending") {
-        void sendTextMessage(session, text, type)
-          .then((res) => {
-            if (res.reply_lang) setLang(asReplyLang(res.reply_lang));
-          })
-          .catch((err) => failLoud(errNetwork(err instanceof Error ? err.message : undefined)));
-      }
-
       if (status === "RUNNING" && type === "STATUS") {
         setInterrupt("STATUS");
         pushLog("interrupt", "STATUS · tool continues running");
+        if (session && session !== "pending") {
+          void sendTextMessage(session, text, "STATUS").catch(() => undefined);
+        }
         addAssistant(ackStatus(task?.type, replyLangRef.current));
         return;
       }
@@ -626,25 +761,81 @@ export function VoiceAgent() {
       }
 
       if (type === "CANCEL") {
+        if (session && session !== "pending") {
+          void sendTextMessage(session, text, "CANCEL").catch(() => undefined);
+        }
         cancelLocal();
         return;
       }
 
-      const next = parseTask(text, status === "RUNNING" ? task : null, preferredCityRef.current);
+      const mergePrev = status === "RUNNING" || status === "COMPLETE" ? task : null;
+      const next = parseTask(text, mergePrev, preferredCityRef.current);
+      const kind = type || (status === "RUNNING" ? "REFINE" : null);
+      const cityFromParams = next.params.match(/city=([^ ·]+)/)?.[1];
+      if (cityFromParams) {
+        preferredCityRef.current = cityFromParams;
+        cityConfirmedRef.current = true;
+        setPreferredCity(cityFromParams);
+        setCityConfirmed(true);
+        if (session && session !== "pending") {
+          void setSessionCity(session, cityFromParams).catch(() => undefined);
+        }
+      }
+
+      if (!/\bcity=/.test(next.params)) {
+        pendingDraftRef.current = { task: next, interrupt: kind };
+        setPendingAsk("city");
+        addAssistant(askCity(replyLangRef.current));
+        return;
+      }
+
+      if (
+        next.type === "hotel" &&
+        !/\bbudget=/.test(next.params) &&
+        kind !== "REFINE" &&
+        kind !== "PIVOT" &&
+        status !== "RUNNING"
+      ) {
+        pendingDraftRef.current = { task: next, interrupt: kind };
+        setPendingAsk("budget");
+        addAssistant(askBudget(replyLangRef.current));
+        return;
+      }
+
+      if (session && session !== "pending") {
+        void sendTextMessage(session, text, type)
+          .then((res) => {
+            if (res.reply_lang) setLang(asReplyLang(res.reply_lang));
+            if (res.need_city) {
+              fenceLocalTool();
+              pendingDraftRef.current = { task: next, interrupt: kind };
+              setPendingAsk("city");
+              addAssistant(askCity(replyLangRef.current));
+              return;
+            }
+            if (res.need_budget) {
+              fenceLocalTool();
+              pendingDraftRef.current = { task: next, interrupt: kind };
+              setPendingAsk("budget");
+              addAssistant(askBudget(replyLangRef.current));
+            }
+          })
+          .catch((err) => failLoud(errNetwork(err instanceof Error ? err.message : undefined)));
+      }
+
       currentTurn.current += 1;
       const n = currentTurn.current;
       setTurnId(n);
-      const kind = type || (status === "RUNNING" ? "REFINE" : null);
       setInterrupt(kind);
       if (status === "RUNNING") pushLog("interrupt", `${kind || "REFINE"} · old task fenced`);
-      // Prefer backend request id when the POST returns later — for now use local id;
-      // WS completion matches via turn_id + result payload.
       runTool(next, n, kind);
     },
     [
       addAssistant,
       cancelLocal,
       failLoud,
+      fenceLocalTool,
+      pendingAsk,
       pushLog,
       runTool,
       session,
@@ -653,6 +844,32 @@ export function VoiceAgent() {
       status,
       task,
     ],
+  );
+
+  const runJudgeDemo = useCallback(
+    (demo: JudgeDemo) => {
+      if (demoRunning) return;
+      setDemoRunning(demo.id);
+      pushLog("turn", `DEMO · ${demo.id}`);
+      // Ensure city is confirmed so scripts don't stall on Kaunsa city?
+      if (!cityConfirmedRef.current) {
+        applyCity("Delhi", { speak: false });
+      }
+      let cancelled = false;
+      const timersLocal: number[] = [];
+      demo.steps.forEach((step) => {
+        const id = window.setTimeout(() => {
+          if (cancelled) return;
+          submit(step.utterance);
+          if (step === demo.steps[demo.steps.length - 1]) {
+            window.setTimeout(() => setDemoRunning(null), 500);
+          }
+        }, step.delayMs);
+        timersLocal.push(id);
+      });
+      timers.current.push(...timersLocal);
+    },
+    [applyCity, demoRunning, pushLog, submit],
   );
 
   // Speak real backend tool results (and keep DebugPanel numbers in sync)
@@ -716,8 +933,11 @@ export function VoiceAgent() {
           if (cancelled) return;
           setSession(created.session_id);
           const city = (created.detected_city || "Delhi").trim() || "Delhi";
-          preferredCityRef.current = city;
+          // Display suggestion only — don't invent preferred until Yes / Change
+          preferredCityRef.current = "";
+          cityConfirmedRef.current = false;
           setPreferredCity(city);
+          setCityConfirmed(false);
           const greeting = created.greeting?.trim() || greetCity(city, replyLangRef.current);
           setCityPrompt({
             open: true,
@@ -952,10 +1172,38 @@ export function VoiceAgent() {
             </div>
           ) : null}
 
+          {status === "COMPLETE" && task ? (
+            <div className="mt-3">
+              <p className="mb-1.5 text-center text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Next · one tap
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {FOLLOW_UP_CHIPS.map((chip) => (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() => {
+                      void unlockAudio();
+                      stopSpeaking();
+                      submit(chip.utterance);
+                    }}
+                    className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-brand-cyan transition hover:border-accent/50 hover:bg-accent/20"
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-6 flex flex-col items-center border-t border-border pt-6">
             <PushToTalk
               sessionId={session}
               disabled={!mounted || session === "pending"}
+              onBargeIn={() => {
+                stopSpeaking();
+                void unlockAudio();
+              }}
               onRecordingChange={(isRec) => {
                 setRecording(isRec);
                 if (isRec) {
@@ -967,7 +1215,16 @@ export function VoiceAgent() {
                 setSendingAudio(busy);
                 if (busy) setPipeline("uploading");
               }}
-              onSent={({ turn_id, transcript, interrupt_type, reply_lang, fact_summary }) => {
+              onSent={(result) => {
+                const {
+                  turn_id,
+                  transcript,
+                  interrupt_type,
+                  reply_lang,
+                  fact_summary,
+                  need_city,
+                  need_budget,
+                } = result;
                 const spoken = transcript?.trim();
                 if (!spoken) {
                   failLoud(errSttEmpty());
@@ -985,7 +1242,7 @@ export function VoiceAgent() {
                 setTurns((x) => [...x, { role: "user", text: spoken, time: now() }]);
                 pushLog("turn", `USER · ${spoken} (voice/STT)`);
 
-                const type = (interrupt_type as Interrupt | null) || classify(spoken, task);
+                const type = (interrupt_type as Interrupt | null) || classifyInterrupt(spoken, task);
                 setInterrupt(type);
 
                 if (type === "FACT") {
@@ -1017,12 +1274,61 @@ export function VoiceAgent() {
                   return;
                 }
 
+                if (need_city) {
+                  const draft = parseTask(
+                    spoken,
+                    status === "RUNNING" || status === "COMPLETE" ? task : null,
+                    preferredCityRef.current,
+                  );
+                  pendingDraftRef.current = {
+                    task: draft,
+                    interrupt: type || (status === "RUNNING" ? "REFINE" : null),
+                  };
+                  setPendingAsk("city");
+                  addAssistant(askCity(replyLangRef.current));
+                  return;
+                }
+                if (need_budget) {
+                  const draft = parseTask(
+                    spoken,
+                    status === "RUNNING" || status === "COMPLETE" ? task : null,
+                    preferredCityRef.current,
+                  );
+                  pendingDraftRef.current = {
+                    task: draft,
+                    interrupt: type || (status === "RUNNING" ? "REFINE" : null),
+                  };
+                  setPendingAsk("budget");
+                  addAssistant(askBudget(replyLangRef.current));
+                  return;
+                }
+
                 const next = parseTask(
                   spoken,
-                  status === "RUNNING" ? task : null,
+                  status === "RUNNING" || status === "COMPLETE" ? task : null,
                   preferredCityRef.current,
                 );
                 const kind = type || (status === "RUNNING" ? "REFINE" : null);
+
+                if (!/\bcity=/.test(next.params)) {
+                  pendingDraftRef.current = { task: next, interrupt: kind };
+                  setPendingAsk("city");
+                  addAssistant(askCity(replyLangRef.current));
+                  return;
+                }
+                if (
+                  next.type === "hotel" &&
+                  !/\bbudget=/.test(next.params) &&
+                  kind !== "REFINE" &&
+                  kind !== "PIVOT" &&
+                  status !== "RUNNING"
+                ) {
+                  pendingDraftRef.current = { task: next, interrupt: kind };
+                  setPendingAsk("budget");
+                  addAssistant(askBudget(replyLangRef.current));
+                  return;
+                }
+
                 if (status === "RUNNING") {
                   pushLog("interrupt", `${kind || "REFINE"} · old task fenced`);
                 }
@@ -1042,9 +1348,14 @@ export function VoiceAgent() {
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onFocus={() => {
+                  stopSpeaking();
+                  void unlockAudio();
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.nativeEvent.isComposing) {
                     void unlockAudio();
+                    stopSpeaking();
                     submit(input);
                   }
                 }}
@@ -1057,9 +1368,11 @@ export function VoiceAgent() {
                 whileTap={{ scale: 0.96 }}
                 onPointerDown={() => {
                   void unlockAudio();
+                  stopSpeaking();
                 }}
                 onClick={() => {
                   void unlockAudio();
+                  stopSpeaking();
                   submit(input);
                 }}
                 aria-label="Send"
@@ -1072,7 +1385,7 @@ export function VoiceAgent() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <DebugPanel state={wsState} connected={wsConnected} />
+          <DebugPanel state={wsState} connected={wsConnected} latency={latency} />
 
           <aside className="glass-card p-5">
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -1107,6 +1420,27 @@ export function VoiceAgent() {
           eyebrow="INTERRUPTION INTELLIGENCE"
           title="Every “wait” has a different meaning."
         />
+        <div className="mt-4 flex flex-wrap gap-2">
+          {JUDGE_DEMOS.map((demo) => (
+            <button
+              key={demo.id}
+              type="button"
+              disabled={Boolean(demoRunning)}
+              title={demo.description}
+              onClick={() => {
+                void unlockAudio();
+                runJudgeDemo(demo);
+              }}
+              className={`rounded-full border px-4 py-2 text-xs font-semibold tracking-wide transition ${
+                demoRunning === demo.id
+                  ? "border-brand-amber/50 bg-brand-amber/15 text-brand-amber"
+                  : "border-border bg-card/60 text-muted-foreground hover:border-brand-violet/40 hover:text-foreground"
+              } disabled:opacity-50`}
+            >
+              Demo · {demo.label}
+            </button>
+          ))}
+        </div>
         <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {interruptCards.map((card, i) => (
             <InterruptCard

@@ -112,12 +112,46 @@ def parse_hotel_params(
     if re.search(r"non[- ]?veg|any food|nonveg", s):
         veg_only = False
 
+    # B7: "same but Mumbai" / "same search in Goa" — keep filters, swap city only
+    same_city_only = bool(
+        re.search(
+            r"\bsame\b.*\b(but|in|for)\b|\bsame\s+search\b|\bbut\s+in\s+\w+",
+            s,
+        )
+    )
+    if same_city_only and prev:
+        resolved_city = city or prev.get("city") or (default_city.strip() if default_city else None)
+        return {
+            "city": resolved_city,
+            "budget": prev.get("budget", 5000),
+            "near_metro": bool(prev.get("near_metro", False)),
+            "veg_only": bool(prev.get("veg_only", False)) if not re.search(r"\bveg", s) else veg_only,
+            "city_required": resolved_city is None,
+            "budget_missing": "budget" not in prev and budget is None,
+        }
+
+    resolved_city = city or prev.get("city") or (default_city.strip() if default_city else None)
+    budget_set = budget is not None or "budget" in prev
+    resolved_budget = budget if budget is not None else prev.get("budget")
+
     return {
-        "city": city or prev.get("city") or default_city or "Delhi",
-        "budget": budget if budget is not None else prev.get("budget", 5000),
+        "city": resolved_city,
+        "budget": resolved_budget if resolved_budget is not None else 5000,
         "near_metro": bool(near_metro),
         "veg_only": bool(veg_only),
+        "city_required": resolved_city is None,
+        "budget_missing": not budget_set,
     }
+
+
+def _contrast_hotels(top: list[dict], *, lang: str = "en") -> str:
+    """One short compare line when at least two hotels are returned."""
+    if len(top) < 2:
+        return ""
+    a, b = top[0], top[1]
+    if lang == "hi":
+        return f" Compare: {a['name']} ₹{a['price_inr']} vs {b['name']} ₹{b['price_inr']}."
+    return f" Compare: {a['name']} ₹{a['price_inr']} vs {b['name']} ₹{b['price_inr']}."
 
 
 def _format_hotel_summary(
@@ -133,15 +167,16 @@ def _format_hotel_summary(
     picks = ", ".join(f"{h['name']} {h['price_inr']}" for h in top)
     metro = " near metro" if near_metro else ""
     veg = ", veg" if veg_only else ""
+    contrast = _contrast_hotels(top, lang=lang)
 
     if lang == "hi":
         return (
             f"{city_name}, {cap} ke under{metro}{veg} — {len(top)} hotels. "
-            f"{picks}."
+            f"{picks}.{contrast}"
         )
     return (
         f"{city_name}, under {cap}{metro}{veg} — {len(top)} hotels. "
-        f"{picks}."
+        f"{picks}.{contrast}"
     )
 
 
