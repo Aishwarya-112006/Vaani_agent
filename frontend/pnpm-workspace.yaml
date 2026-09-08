@@ -1,0 +1,5 @@
+packages:
+  - "."
+
+# pnpm 12 defaults to a 24h publish cooldown; disable for local/hackathon installs.
+minimumReleaseAge: 0
