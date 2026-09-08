@@ -15,6 +15,7 @@ export type MessageResponse = {
   active_request_id?: string | null;
   transcript?: string | null;
   reply_lang?: string | null;
+  fact_summary?: string | null;
 };
 
 export async function createSession(): Promise<SessionResponse> {
