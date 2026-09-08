@@ -206,23 +206,11 @@ function sniffMime(bytes: ArrayBuffer): string {
   if (u8.length >= 2 && u8[0] === 0xff && u8[1] !== undefined && (u8[1] & 0xe0) === 0xe0)
     return "audio/mpeg";
   // RIFF WAVE
-  if (
-    u8.length >= 12 &&
-    u8[0] === 0x52 &&
-    u8[1] === 0x49 &&
-    u8[2] === 0x46 &&
-    u8[3] === 0x46
-  ) {
+  if (u8.length >= 12 && u8[0] === 0x52 && u8[1] === 0x49 && u8[2] === 0x46 && u8[3] === 0x46) {
     return "audio/wav";
   }
   // ftyp → m4a/aac
-  if (
-    u8.length >= 8 &&
-    u8[4] === 0x66 &&
-    u8[5] === 0x74 &&
-    u8[6] === 0x79 &&
-    u8[7] === 0x70
-  ) {
+  if (u8.length >= 8 && u8[4] === 0x66 && u8[5] === 0x74 && u8[6] === 0x79 && u8[7] === 0x70) {
     return "audio/mp4";
   }
   return "audio/mpeg";

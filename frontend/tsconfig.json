@@ -10,7 +10,6 @@
        vite/client is pulled in via src/vite-env.d.ts instead. */
 
     "moduleResolution": "Bundler",
-    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": false,

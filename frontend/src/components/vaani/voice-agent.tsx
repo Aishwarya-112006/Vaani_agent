@@ -858,7 +858,7 @@ export function VoiceAgent() {
       if (!cityConfirmedRef.current) {
         applyCity("Delhi", { speak: false });
       }
-      let cancelled = false;
+      const cancelled = false;
       const timersLocal: number[] = [];
       demo.steps.forEach((step) => {
         const id = window.setTimeout(() => {
@@ -1255,7 +1255,8 @@ export function VoiceAgent() {
                 setTurns((x) => [...x, { role: "user", text: spoken, time: now() }]);
                 pushLog("turn", `USER · ${spoken} (voice/STT)`);
 
-                const type = (interrupt_type as Interrupt | null) || classifyInterrupt(spoken, task);
+                const type =
+                  (interrupt_type as Interrupt | null) || classifyInterrupt(spoken, task);
                 setInterrupt(type);
 
                 if (type === "FACT") {

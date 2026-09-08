@@ -17,8 +17,7 @@ const FACT_RE = /\b(what is|tell me about|who is|kya hai|kya hota)\b|\bbatao\b/;
 const CANCEL_RE = /forget it|never mind|stop searching|cancel|stop it/;
 const RESTAURANT_RE =
   /restaurants?|resturants?|restraunts?|food|eat|dinner|cafe|cuisine|thali|lunch|breakfast|khana|khaana/;
-const HOTEL_RE =
-  /\bhotels?\b|\bhotal\b|\bstay\b|\broom\b|\brooms?\b|lodging|accommodation|resort/;
+const HOTEL_RE = /\bhotels?\b|\bhotal\b|\bstay\b|\broom\b|\brooms?\b|lodging|accommodation|resort/;
 const REFINE_RE =
   /actually|only|vegetarian|veg|under|metro|near|rupees|₹|cuisine|area|same\s+(but|search)|shakahari|sirf\s+veg/;
 
