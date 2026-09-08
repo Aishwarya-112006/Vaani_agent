@@ -608,8 +608,10 @@ async def synthesize_speech(body: TtsRequest):
         audio = await rime_speak(text, reply_lang=lang)
     except Exception as exc:
         log_event("tts_failed")
-        detail = str(exc).strip() or repr(exc)
-        raise HTTPException(status_code=502, detail=f"Rime TTS failed: {detail}") from exc
+        raise HTTPException(
+            status_code=502,
+            detail="Voice service is temporarily unavailable — please try again in a moment."
+        ) from exc
 
     if not audio:
         raise HTTPException(status_code=502, detail="Rime returned empty audio")
