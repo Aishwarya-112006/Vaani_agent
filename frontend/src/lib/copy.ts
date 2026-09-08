@@ -69,32 +69,65 @@ export function searchFiller(tick: number, lang: ReplyLang = "en"): string {
   return list[tick % list.length] ?? list[0]!;
 }
 
+export type ConstraintKey = "city" | "budget" | "veg" | "metro" | "cuisine" | "area";
+
+/** Human label for an active filter chip (UI). */
+export function constraintChipLabel(key: ConstraintKey, value: string, lang: ReplyLang = "en"): string {
+  switch (key) {
+    case "city":
+      return value;
+    case "budget":
+      return `₹${value}`;
+    case "veg":
+      return lang === "hi" ? "veg" : "veg";
+    case "metro":
+      return lang === "hi" ? "metro" : "metro";
+    case "cuisine":
+      return value;
+    case "area":
+      return value;
+  }
+}
+
+/** Spoken confirm of filters before the first search (optional product line). */
+export function confirmSearch(
+  type: "hotel" | "restaurant",
+  params: string,
+  lang: ReplyLang = "en",
+): string {
+  const parts = params.split(" · ").filter(Boolean);
+  const city = parts.find((p) => p.startsWith("city="))?.slice(5) ?? "Delhi";
+  const budget = parts.find((p) => p.startsWith("budget="))?.slice(7);
+  const area = parts.find((p) => p.startsWith("area="))?.slice(5);
+  const cuisine = parts.find((p) => p.startsWith("cuisine="))?.slice(8);
+  const veg = parts.some((p) => p === "veg_only=true");
+  const metro = parts.some((p) => p === "near_metro=true");
+
+  const tags: string[] = [city];
+  if (area) tags.push(area);
+  if (budget) tags.push(`₹${budget}`);
+  if (cuisine) tags.push(cuisine);
+  if (veg) tags.push(lang === "hi" ? "veg" : "veg");
+  if (metro) tags.push(lang === "hi" ? "metro ke paas" : "near metro");
+  const list = tags.join(" · ");
+
+  if (lang === "hi") {
+    return type === "restaurant"
+      ? `Confirm: ${list}. Restaurants dhoondhti hoon.`
+      : `Confirm: ${list}. Hotels dhoondhti hoon.`;
+  }
+  return type === "restaurant"
+    ? `Confirming ${list}. Searching restaurants now.`
+    : `Confirming ${list}. Searching hotels now.`;
+}
+
 export function ackSearch(
   type: "hotel" | "restaurant",
   params: string,
   lang: ReplyLang = "en",
 ): string {
-  const city = params.match(/city=([^ ·]+)/)?.[1] ?? "Delhi";
-  if (type === "restaurant") {
-    const area = params.match(/area=([^ ·]+)/)?.[1];
-    if (lang === "hi") {
-      return area
-        ? `Theek hai — ${area} mein restaurants dhoondh rahi hoon.`
-        : `Theek hai — ${city} mein restaurants dhoondh rahi hoon.`;
-    }
-    return area
-      ? `Okay — searching restaurants in ${area}.`
-      : `Okay — searching restaurants in ${city}.`;
-  }
-  const budget = params.match(/budget=(\d+)/)?.[1];
-  if (lang === "hi") {
-    return budget
-      ? `Okay, ${city} mein ₹${budget} ke under hotels check kar rahi hoon.`
-      : `Okay, ${city} mein hotels dhoondh rahi hoon.`;
-  }
-  return budget
-    ? `Okay, checking hotels in ${city} under ₹${budget} budget.`
-    : `Okay, searching hotels in ${city}.`;
+  // Prefer the explicit confirm line for first search
+  return confirmSearch(type, params, lang);
 }
 
 export function ackRefine(type: "hotel" | "restaurant", lang: ReplyLang = "en"): string {

@@ -12,6 +12,7 @@ import {
   ackStatus,
   CITY_CHIPS,
   confirmCity,
+  constraintChipLabel,
   errNetwork,
   errSttEmpty,
   errTts,
@@ -21,6 +22,7 @@ import {
   resultHotels,
   resultRestaurants,
   searchFiller,
+  type ConstraintKey,
   type PipelinePhase,
   type ReplyLang,
 } from "@/lib/copy";
@@ -146,6 +148,54 @@ function resolveTaskType(text: string, previous?: Task | null): Task["type"] {
   // REFINE / continuation — keep current tool (don't flip on "veg" / "metro")
   if (previous?.type) return previous.type;
   return "hotel";
+}
+
+type ConstraintChip = {
+  key: ConstraintKey;
+  paramKey: string;
+  value: string;
+  label: string;
+};
+
+const PARAM_TO_CONSTRAINT: Record<string, ConstraintKey> = {
+  city: "city",
+  budget: "budget",
+  veg_only: "veg",
+  near_metro: "metro",
+  cuisine: "cuisine",
+  area: "area",
+};
+
+function splitParams(params: string): string[] {
+  return params.split(" · ").map((p) => p.trim()).filter(Boolean);
+}
+
+function paramsToChips(params: string, lang: ReplyLang): ConstraintChip[] {
+  const chips: ConstraintChip[] = [];
+  for (const part of splitParams(params)) {
+    const eq = part.indexOf("=");
+    if (eq < 0) continue;
+    const paramKey = part.slice(0, eq);
+    const value = part.slice(eq + 1);
+    const key = PARAM_TO_CONSTRAINT[paramKey];
+    if (!key) continue;
+    if ((paramKey === "veg_only" || paramKey === "near_metro") && value !== "true") continue;
+    chips.push({
+      key,
+      paramKey,
+      value,
+      label: constraintChipLabel(key, value, lang),
+    });
+  }
+  return chips;
+}
+
+function removeParamKey(params: string, paramKey: string, fallbackCity: string): string {
+  const next = splitParams(params).filter((p) => !p.startsWith(`${paramKey}=`));
+  if (!next.some((p) => p.startsWith("city="))) {
+    next.unshift(`city=${fallbackCity.trim() || "Delhi"}`);
+  }
+  return next.join(" · ");
 }
 
 function parseTask(text: string, previous?: Task | null, defaultCity = "Delhi"): Task {
@@ -483,6 +533,41 @@ export function VoiceAgent() {
     pushLog("interrupt", "CANCEL · in-flight search fenced");
     addAssistant(ackCancel(replyLangRef.current));
   }, [addAssistant, fenceLocalTool, pushLog]);
+
+  /** Tap constraint chip → drop filter → auto REFINE. */
+  const removeConstraint = useCallback(
+    (paramKey: string, label: string) => {
+      const current = taskRef.current;
+      if (!current) return;
+
+      const nextParams = removeParamKey(current.params, paramKey, preferredCityRef.current);
+      if (nextParams === current.params) return;
+
+      const next: Task = {
+        type: current.type,
+        params: nextParams,
+        tool_call_id: Math.random().toString(16).slice(2, 10),
+      };
+
+      void unlockAudio();
+      const note = `Remove ${label}`;
+      setTurns((x) => [...x, { role: "user", text: note, time: now() }]);
+      pushLog("interrupt", `REFINE · removed ${paramKey}`);
+      setInterrupt("REFINE");
+
+      if (session && session !== "pending") {
+        void sendTextMessage(session, note, "REFINE").catch((err) =>
+          failLoud(errNetwork(err instanceof Error ? err.message : undefined)),
+        );
+      }
+
+      currentTurn.current += 1;
+      const n = currentTurn.current;
+      setTurnId(n);
+      runTool(next, n, "REFINE");
+    },
+    [failLoud, pushLog, runTool, session],
+  );
 
   const submit = useCallback(
     (raw: string) => {
@@ -841,6 +926,31 @@ export function VoiceAgent() {
               </button>
             </p>
           )}
+
+          {task ? (
+            <div className="mt-3">
+              <p className="mb-1.5 text-center text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Active filters · tap to remove
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {paramsToChips(task.params, replyLang).map((chip) => (
+                  <button
+                    key={`${chip.paramKey}=${chip.value}`}
+                    type="button"
+                    title={`Remove ${chip.key}`}
+                    onClick={() => removeConstraint(chip.paramKey, chip.label)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-medium text-brand-violet transition hover:border-destructive/40 hover:bg-destructive/10 hover:text-brand-rose"
+                  >
+                    <span className="opacity-60">{chip.key}</span>
+                    <span>{chip.label}</span>
+                    <span aria-hidden className="text-[10px] opacity-70">
+                      ×
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="mt-6 flex flex-col items-center border-t border-border pt-6">
             <PushToTalk
