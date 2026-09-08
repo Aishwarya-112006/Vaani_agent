@@ -14,60 +14,17 @@ import re
 from typing import Any, Optional
 
 from tools.cities import extract_city
+from tools.mock_inventory import (
+    default_area_for_city,
+    hotels_for_city,
+    normalize_city_key,
+)
 
 logger = logging.getLogger(__name__)
 
 # Artificial latency window (seconds) — short enough for demo UX, still interruptible
 MIN_DELAY = 2.0
 MAX_DELAY = 2.8
-
-_MOCK_HOTELS = [
-    {
-        "name": "The Lotus Residency",
-        "area": "Connaught Place",
-        "price_inr": 4200,
-        "rating": 4.5,
-        "near_metro": True,
-        "veg_friendly": True,
-        "amenities": ["breakfast", "wifi", "ac"],
-    },
-    {
-        "name": "Metro Inn Deluxe",
-        "area": "Karol Bagh",
-        "price_inr": 3100,
-        "rating": 4.1,
-        "near_metro": True,
-        "veg_friendly": False,
-        "amenities": ["wifi", "parking"],
-    },
-    {
-        "name": "Saffron Stay",
-        "area": "Saket",
-        "price_inr": 4800,
-        "rating": 4.6,
-        "near_metro": False,
-        "veg_friendly": True,
-        "amenities": ["breakfast", "pool", "spa"],
-    },
-    {
-        "name": "Green Leaf Boutique",
-        "area": "Hauz Khas",
-        "price_inr": 3600,
-        "rating": 4.3,
-        "near_metro": True,
-        "veg_friendly": True,
-        "amenities": ["veg kitchen", "wifi", "workspace"],
-    },
-    {
-        "name": "CityPulse Hotel",
-        "area": "Aerocity",
-        "price_inr": 5500,
-        "rating": 4.4,
-        "near_metro": False,
-        "veg_friendly": False,
-        "amenities": ["airport shuttle", "gym"],
-    },
-]
 
 
 def parse_hotel_params(
@@ -89,7 +46,7 @@ def parse_hotel_params(
 
     near_metro = prev.get("near_metro", False)
     if re.search(
-        r"near\s+(a\s+|the\s+)?metro|metro\s+station|metro\s+ke\s+paas|metro\s+paas",
+        r"near\s+(?:\w+\s+){0,4}metro|metro\s+station|metro\s+ke\s+paas|metro\s+paas",
         s,
     ):
         near_metro = True
@@ -154,7 +111,7 @@ def _format_hotel_summary(
     lang: str = "en",
 ) -> str:
     """Short spoken summary (keeps Rime TTS snappy). Budget is INR, not meters."""
-    picks = ", ".join(f"{h['name']} {h['price_inr']}" for h in top)
+    picks = ", ".join(f"{h['name']} ({h['area']}) ₹{h['price_inr']}" for h in top)
     metro = " near metro" if near_metro else ""
     veg = ", veg" if veg_only else ""
     contrast = _contrast_hotels(top, lang=lang)
@@ -185,7 +142,8 @@ async def search_hotels(
         asyncio.CancelledError: if the surrounding task is cancelled mid-delay
             (REFINE / CANCEL / PIVOT interrupt).
     """
-    city_name = (city or "Delhi").strip().title()
+    city_key = normalize_city_key(city)
+    city_name = city_key
     cap = int(budget) if budget is not None else 5000
     wait = delay if delay is not None else random.uniform(MIN_DELAY, MAX_DELAY)
 
@@ -203,7 +161,7 @@ async def search_hotels(
     await asyncio.sleep(wait)
 
     results = []
-    for hotel in _MOCK_HOTELS:
+    for hotel in hotels_for_city(city_key):
         if hotel["price_inr"] > cap:
             continue
         if near_metro and not hotel["near_metro"]:
@@ -229,7 +187,7 @@ async def search_hotels(
             {
                 "name": "Budget Nest",
                 "city": city_name,
-                "area": "City Center",
+                "area": default_area_for_city(city_key),
                 "price_inr": min(cap, 2500),
                 "rating": 3.9,
                 "near_metro": near_metro,

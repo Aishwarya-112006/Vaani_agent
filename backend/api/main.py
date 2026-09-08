@@ -168,7 +168,9 @@ async def _run_search_restaurants(
             city=params.get("city", "Delhi"),
             cuisine=params.get("cuisine", "Indian"),
             veg_only=bool(params.get("veg_only", False)),
-            area=params.get("area", "Connaught Place"),
+            area=params.get("area"),
+            near_metro=bool(params.get("near_metro", False)),
+            area_explicit=bool(params.get("area_explicit", False)),
             reply_lang=getattr(state, "reply_lang", "en") or "en",
         )
     except asyncio.CancelledError:
@@ -477,7 +479,11 @@ async def handle_message(
         merge_from = (
             prev
             if same_kind
-            else ({k: prev[k] for k in ("city", "veg_only") if k in prev} if prev else None)
+            else (
+                {k: prev[k] for k in ("city", "veg_only", "near_metro") if k in prev}
+                if prev
+                else None
+            )
         )
         tool_params = parse_restaurant_params(
             text or "",

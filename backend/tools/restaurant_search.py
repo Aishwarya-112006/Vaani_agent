@@ -1,6 +1,6 @@
 """Interruptible mock restaurant search tool.
 
-`search_restaurants` sleeps 3–4 seconds (cancellable via asyncio task cancel),
+`search_restaurants` sleeps ~2–2.8 seconds (cancellable via asyncio task cancel),
 then returns structured mock results. Cancellation raises CancelledError
 so callers can treat the delay as interruptible — same behavior as search_hotels.
 """
@@ -14,69 +14,19 @@ import re
 from typing import Any, Optional
 
 from tools.cities import extract_city, is_known_city_token
+from tools.mock_inventory import (
+    all_parseable_areas,
+    city_for_area,
+    default_area_for_city,
+    normalize_city_key,
+    restaurants_for_city,
+)
 
 logger = logging.getLogger(__name__)
 
 # Artificial latency window (seconds) — same as search_hotels
 MIN_DELAY = 2.0
 MAX_DELAY = 2.8
-
-_MOCK_RESTAURANTS = [
-    {
-        "name": "Saffron Thali",
-        "area": "Connaught Place",
-        "cuisine": "North Indian",
-        "rating": 4.6,
-        "veg_only": True,
-        "price_for_two": 800,
-        "open_now": True,
-    },
-    {
-        "name": "Coastal Catch",
-        "area": "Karol Bagh",
-        "cuisine": "South Indian",
-        "rating": 4.3,
-        "veg_only": False,
-        "price_for_two": 1200,
-        "open_now": True,
-    },
-    {
-        "name": "Green Bowl Cafe",
-        "area": "Hauz Khas",
-        "cuisine": "Cafe",
-        "rating": 4.4,
-        "veg_only": True,
-        "price_for_two": 600,
-        "open_now": True,
-    },
-    {
-        "name": "Spice Route Kitchen",
-        "area": "Saket",
-        "cuisine": "Indian",
-        "rating": 4.5,
-        "veg_only": False,
-        "price_for_two": 1500,
-        "open_now": False,
-    },
-    {
-        "name": "Mumbai Street Kitchen",
-        "area": "Connaught Place",
-        "cuisine": "Street Food",
-        "rating": 4.2,
-        "veg_only": False,
-        "price_for_two": 500,
-        "open_now": True,
-    },
-    {
-        "name": "Pure Veg Delight",
-        "area": "Lajpat Nagar",
-        "cuisine": "North Indian",
-        "rating": 4.1,
-        "veg_only": True,
-        "price_for_two": 700,
-        "open_now": True,
-    },
-]
 
 _CUISINES = [
     ("south indian", "South Indian"),
@@ -88,26 +38,12 @@ _CUISINES = [
     ("thai", "Thai"),
     ("mughlai", "Mughlai"),
     ("biryani", "Biryani"),
+    ("seafood", "Seafood"),
+    ("rajasthani", "Rajasthani"),
     ("cafe", "Cafe"),
     ("indian", "Indian"),
 ]
 
-_AREAS = [
-    "connaught place",
-    "karol bagh",
-    "hauz khas",
-    "saket",
-    "lajpat nagar",
-    "aerocity",
-    "india gate",
-    "chandni chowk",
-    "gurgaon",
-    "noida",
-    "bandra",
-    "andheri",
-    "koramangala",
-    "indiranagar",
-]
 
 def parse_restaurant_params(
     text: str,
@@ -119,7 +55,6 @@ def parse_restaurant_params(
     prev = dict(previous or {})
     # Drop hotel-only keys when pivoting
     prev.pop("budget", None)
-    prev.pop("near_metro", None)
 
     s = (text or "").lower()
 
@@ -132,9 +67,23 @@ def parse_restaurant_params(
             break
 
     area = None
-    for a in _AREAS:
+    for a in all_parseable_areas():
         if a in s:
-            area = a.title()
+            area = a.title().replace("Mg Road", "MG Road").replace("Hsr Layout", "HSR Layout")
+            area = area.replace("Fc Road", "FC Road").replace("Mi Road", "MI Road")
+            area = area.replace("T Nagar", "T Nagar")
+            if a == "t nagar":
+                area = "T Nagar"
+            elif a == "mg road":
+                area = "MG Road"
+            elif a == "hsr layout":
+                area = "HSR Layout"
+            elif a == "fc road":
+                area = "FC Road"
+            elif a == "mi road":
+                area = "MI Road"
+            elif a == "hitech city":
+                area = "Hitech City"
             break
     if area is None:
         area_match = re.search(
@@ -144,7 +93,13 @@ def parse_restaurant_params(
         )
         if area_match:
             candidate = area_match.group(1).strip()
-            if not is_known_city_token(candidate):
+            # Don't treat "banglore metro station" / city names as an area
+            cand_l = candidate.lower()
+            if (
+                not is_known_city_token(candidate)
+                and extract_city(candidate) is None
+                and "metro" not in cand_l
+            ):
                 area = candidate.title()
 
     veg_only = prev.get("veg_only", False)
@@ -153,27 +108,50 @@ def parse_restaurant_params(
     if re.search(r"non[- ]?veg|any food|nonveg", s):
         veg_only = False
 
+    near_metro = bool(prev.get("near_metro", False))
+    if re.search(
+        r"near\s+(?:\w+\s+){0,4}metro|metro\s+station|metro\s+ke\s+paas|metro\s+paas",
+        s,
+    ):
+        near_metro = True
+    if re.search(r"not\s+near\s+metro|anywhere|kahin\s+bhi", s):
+        near_metro = False
+
     same_city_only = bool(
         re.search(r"\bsame\b.*\b(but|in|for)\b|\bsame\s+search\b|\bbut\s+in\s+\w+", s)
     )
+    resolved_city = city or prev.get("city") or (default_city.strip() if default_city else None)
+
+    # Infer city from neighbourhood when utterance only names an area (e.g. Connaught Place)
+    if not resolved_city and area:
+        resolved_city = city_for_area(area)
+    if not resolved_city and prev.get("area"):
+        resolved_city = city_for_area(str(prev.get("area")))
+
     if same_city_only and prev:
-        resolved_city = city or prev.get("city") or (default_city.strip() if default_city else None)
         return {
             "city": resolved_city,
             "cuisine": prev.get("cuisine") or "Indian",
             "veg_only": bool(prev.get("veg_only", False)),
-            "area": prev.get("area") or "Connaught Place",
+            "area": prev.get("area") or default_area_for_city(resolved_city),
+            "near_metro": bool(prev.get("near_metro", False)),
             "city_required": resolved_city is None,
+            "area_explicit": bool(prev.get("area_explicit")),
         }
 
-    resolved_city = city or prev.get("city") or (default_city.strip() if default_city else None)
+    area_explicit = area is not None or bool(prev.get("area_explicit") and prev.get("area"))
+    resolved_area = area or (prev.get("area") if prev.get("area_explicit") else None)
+    if not resolved_area:
+        resolved_area = default_area_for_city(resolved_city)
 
     return {
         "city": resolved_city,
         "cuisine": cuisine or prev.get("cuisine") or "Indian",
         "veg_only": bool(veg_only),
-        "area": area or prev.get("area") or "Connaught Place",
+        "area": resolved_area,
+        "near_metro": bool(near_metro),
         "city_required": resolved_city is None,
+        "area_explicit": area_explicit,
     }
 
 
@@ -181,8 +159,10 @@ async def search_restaurants(
     city: str,
     cuisine: str | None = "Indian",
     veg_only: bool = False,
-    area: str | None = "Connaught Place",
+    area: str | None = None,
     *,
+    near_metro: bool = False,
+    area_explicit: bool = False,
     delay: float | None = None,
     reply_lang: str = "en",
 ) -> dict[str, Any]:
@@ -192,55 +172,73 @@ async def search_restaurants(
         asyncio.CancelledError: if the surrounding task is cancelled mid-delay
             (REFINE / CANCEL / PIVOT interrupt).
     """
-    city_name = (city or "Delhi").strip().title()
+    city_key = normalize_city_key(city)
+    city_name = city_key
     cuisine_name = (cuisine or "Indian").strip()
-    area_name = (area or "Connaught Place").strip().title()
+    area_name = (area or default_area_for_city(city_key)).strip()
     wait = delay if delay is not None else random.uniform(MIN_DELAY, MAX_DELAY)
 
     logger.info(
-        "search_restaurants start city=%s cuisine=%s veg_only=%s area=%s delay=%.2fs lang=%s",
+        "search_restaurants start city=%s cuisine=%s veg_only=%s area=%s near_metro=%s delay=%.2fs lang=%s",
         city_name,
         cuisine_name,
         veg_only,
         area_name,
+        near_metro,
         wait,
         reply_lang,
     )
 
-    # Interruptible delay — task.cancel() wakes this with CancelledError
     await asyncio.sleep(wait)
 
     cuisine_l = cuisine_name.lower()
     area_l = area_name.lower()
 
     results: list[dict[str, Any]] = []
-    for spot in _MOCK_RESTAURANTS:
+    for spot in restaurants_for_city(city_key):
         if veg_only and not spot["veg_only"]:
             continue
 
-        cuisine_match = cuisine_l in ("indian", "any", "") or cuisine_l in spot["cuisine"].lower()
-        area_match = area_l in spot["area"].lower()
+        cuisine_match = (
+            cuisine_l in ("indian", "any", "")
+            or cuisine_l in spot["cuisine"].lower()
+            or (
+                cuisine_l == "indian"
+                and spot["cuisine"].lower()
+                in ("north indian", "south indian", "rajasthani")
+            )
+        )
+        area_match = area_l in spot["area"].lower() or spot["area"].lower() in area_l
+        metro_match = bool(spot.get("near_metro", False))
 
-        # Soft filter: keep cuisine/area mismatches but rank them lower
         results.append(
             {
                 "name": spot["name"],
                 "city": city_name,
-                "area": spot["area"] if area_match else area_name,
+                "area": spot["area"],
                 "cuisine": spot["cuisine"],
                 "rating": spot["rating"],
                 "veg_only": spot["veg_only"],
                 "price_for_two": spot["price_for_two"],
                 "open_now": spot["open_now"],
+                "near_metro": metro_match,
                 "_cuisine_match": cuisine_match,
                 "_area_match": area_match,
+                "_metro_match": metro_match,
             }
         )
+
+    # Prefer metro matches when requested; hard-drop only if we still have enough hits
+    if near_metro:
+        metro_hits = [r for r in results if r["_metro_match"]]
+        if len(metro_hits) >= 2:
+            results = metro_hits
 
     results.sort(
         key=lambda r: (
             -int(r["_cuisine_match"]),
-            -int(r["_area_match"]),
+            -int(r["_metro_match"]) if near_metro else 0,
+            -int(r["_area_match"]) if area_explicit else 0,
             -r["rating"],
             r["price_for_two"],
         )
@@ -257,6 +255,7 @@ async def search_restaurants(
                 "veg_only": veg_only,
                 "price_for_two": 750,
                 "open_now": True,
+                "near_metro": near_metro,
                 "_cuisine_match": True,
                 "_area_match": True,
             }
@@ -264,7 +263,7 @@ async def search_restaurants(
 
     top = [{k: v for k, v in r.items() if not k.startswith("_")} for r in results[:3]]
 
-    picks = ", ".join(f"{h['name']}" for h in top)
+    picks = ", ".join(f"{h['name']} ({h['area']})" for h in top)
     contrast = ""
     if len(top) >= 2:
         a, b = top[0], top[1]
@@ -272,8 +271,11 @@ async def search_restaurants(
             f" Compare: {a['name']} ₹{a['price_for_two']}/2 vs {b['name']} ₹{b['price_for_two']}/2."
         )
 
+    # City-wide: lead with city; area-specific: lead with area
+    place_lead = f"{area_name}, {city_name}" if area_explicit else city_name
+    metro_bit = " near metro" if near_metro else ""
     summary = (
-        f"{area_name}, {city_name} — {len(top)} restaurants"
+        f"{place_lead}{metro_bit} — {len(top)} restaurants"
         + (f", {cuisine_name}" if cuisine_name else "")
         + (" · veg" if veg_only else "")
         + f". {picks}.{contrast}"
@@ -286,6 +288,8 @@ async def search_restaurants(
             "cuisine": cuisine_name,
             "veg_only": veg_only,
             "area": area_name,
+            "near_metro": near_metro,
+            "area_explicit": area_explicit,
         },
         "count": len(top),
         "results": top,
