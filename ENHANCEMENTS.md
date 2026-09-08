@@ -1,7 +1,7 @@
 # VaaniAgent — things to change / add
 
-Living backlog for product upgrades, API integrations, UX polish, and remaining tech debt.  
-Use this as the single checklist before demo day or the next sprint.
+Living backlog for product upgrades, API integrations, UX polish, optimization, and tech debt.  
+Use this as the single checklist before demo day — and to **split GitHub issues by owner**.
 
 ---
 
@@ -13,180 +13,332 @@ Use this as the single checklist before demo day or the next sprint.
 | **P1** | Strong next — solid product value |
 | **P2** | Nice to have / later |
 | **SKIP** | Not worth it for current hackathon scope |
+| **DONE** | Shipped — keep for history / regression |
+
+## Owner legend (for GitHub assignees)
+
+| Owner | Means |
+|-------|--------|
+| **Frontend** | UI, voice client, `copy.ts`, TTS playback, chips, demos |
+| **Backend** | FastAPI, tools, STT/TTS API, interrupts, pytest, eval harness |
+| **Both** | Needs FE + BE contract; open **two issues** or one epic with two checklists |
+| **Docs** | README / DEMO.md / architecture — either owner, usually Frontend or lead |
+
+**Suggested GitHub labels:** `frontend` · `backend` · `docs` · `P0` · `P1` · `P2`
 
 ---
 
-## A. Recommended free API integrations
+## GitHub issue board (copy titles)
 
-### A1. IPInfo — auto city greeting — **P0**
-**Why:** Killer opener; no credit card; easy.
-
-**What to change**
-- [x] Add `IPINFO_TOKEN` (optional) to `backend/.env.example` — free tier often works with limited unauthenticated access; prefer token.
-- [x] On `POST /session`, resolve client IP → city (fallback: `Delhi`).
-- [x] Return `{ session_id, detected_city, greeting }` (or separate `GET /geo`).
-- [x] Frontend: on session create, speak + show greeting:  
-  `Hi! Searching near {city}?` with chips: **Yes** / **Change city**.
-- [x] Handle localhost/VPN wrong city → always allow override.
-- [x] Do **not** hard-fail session if IPInfo is down.
-
-**Files likely touched**
-- `backend/api/main.py` (`/session`)
-- `backend/api/models.py`
-- `frontend/src/lib/api.ts`
-- `frontend/src/components/vaani/voice-agent.tsx`
-- `frontend/src/lib/copy.ts`
-- `backend/.env.example`
-
----
-
-### A2. Wikipedia API — mid-search side questions — **P0**
-**Why:** No API key; proves “answer without cancelling tool”; great STATUS-adjacent demo.
-
-**What to change**
-- [ ] Add interrupt type **FACT** / **ASIDE** (keep **STATUS** = progress only).
-- [ ] Classifier: questions like `what is …`, `tell me about …`, `kya hai …` while tool is RUNNING.
-- [ ] Call Wikipedia REST summary (`https://en.wikipedia.org/api/rest_v1/page/summary/{title}`) — no key.
-- [ ] Speak short summary via existing `/tts` + Rime.
-- [ ] **Do not** cancel `tool_future` / bump turn for FACT.
-- [ ] Cap summary length (~2 sentences) for TTS.
-- [ ] Fallback spoken line if page missing: `Woh nahi mila — search continue kar rahi hoon.`
-
-**Files likely touched**
-- `backend/api/main.py` (`_classify_interrupt`, `/message`)
-- `backend/tools/wikipedia.py` (new)
-- `frontend/src/lib/copy.ts`
-- `frontend/src/components/vaani/voice-agent.tsx` (classify + speak)
-- `evaluation/scenarios.json` (1–2 FACT scenarios)
-- `tests/test_status.py` or new `tests/test_fact.py`
+| ID | Priority | Owner | Suggested issue title |
+|----|----------|-------|------------------------|
+| B1 | P0 | **Frontend** | `feat(frontend): constraint chips + confirm for active filters` |
+| B6 | P0 | **Frontend** | `feat(frontend): one-click judge demos (REFINE / STATUS / FACT / PIVOT)` |
+| F1 | P0 | **Docs** | `docs: 60s judge script + API key checklist` |
+| B5 | P1 | **Frontend** | `feat(frontend): barge-in — stop TTS on mic/type interrupt` |
+| B11 | P1 | **Frontend** | `feat(frontend): reduce silence between ack and result speech` |
+| B3 | P1 | **Both** | `feat: compare top-2 spoken summary (BE summary + FE copy fallback)` |
+| B2 | P1 | **Frontend** | `feat(frontend): post-result follow-up chips` |
+| B4 | P1 | **Both** | `feat: ask for city/budget when missing (BE prefer + FE speak ask)` |
+| C1 | P1 | **Both** | `chore: align frontend classify() with backend _classify_interrupt` |
+| C2 | P1 | **Frontend** | `chore(frontend): prefer backend interrupt_type on audio path` |
+| C3 | P1 | **Docs** | `docs: clarify hotel/restaurant results are mock inventory` |
+| E1 | P1 | **Backend** | `test(backend): FACT scenarios + tests/test_fact.py` |
+| E2 | P1 | **Backend** | `test: keep harness free of client-fed interrupt_type` |
+| H1 | P1 | **Frontend** | `refactor(frontend): split voice-agent.tsx into modules` |
+| H2 | P1 | **Both** | `chore: shared interrupt keyword source (TS + Python tests)` |
+| D1 | P1 | **Backend** | `chore(backend): verify CORS_ORIGINS on deploy` |
+| B7 | P2 | **Both** | `feat: same search, new city only` |
+| B8 | P2 | **Both** | `feat: undo last interrupt` |
+| B9 | P2 | **Both** | `feat: DebugPanel latency badges (STT/tool/TTS ms)` |
+| B10 | P2 | **Both** | `feat: mock book first hotel confirmation` |
+| A4 | P2 | **Backend** (+ FE display) | `feat(backend): real places/hotel search (OSM) with mock fallback` |
+| A3 | SKIP/P2 | **Backend** | Geocoding only if A4 ships |
+| E3 | P2 | **Frontend** | `feat(frontend): EvalPage FACT / qa_independent results` |
+| H3 | P2 | **Frontend** | `chore(frontend): trim deps / cold-start notes` |
+| H4 | P2 | **Frontend** | `chore(frontend): audit copy.ts EN/HI parity` |
+| D2–D4 | P2 | **Backend** / **Docs** | evaluate endpoint, Docker/.env, Rime-down copy |
 
 ---
 
-### A3. Google Maps Geocoding — **P2 / SKIP for now**
-**Why:** Needs Google Cloud key; little visible benefit until you leave mock tools.
+## Done recently (shipped)
 
-**Only do if**
-- [ ] You also add a real “places near lat/lng” tool, **or**
-- [ ] You store coords on areas and use them in ranking.
+### D1. IPInfo — auto city greeting — **DONE** · Owners: Backend + Frontend
+- [x] **Backend:** `IPINFO_TOKEN`, `tools/ipinfo.py`, `POST /session`, `POST /session/{id}/city`
+- [x] **Frontend:** greeting speak + Yes / Change city chips; override UX
 
-**Otherwise skip** — keep string areas (`Connaught Place`, `near metro` boolean).
+### D2. Wikipedia FACT interrupt — **DONE** (core) · Owners: Backend + Frontend
+- [x] **Backend:** FACT classify, `tools/wikipedia.py`, no tool cancel, `fact_summary`
+- [x] **Frontend:** FACT path — speak summary, no fence
+- [ ] **Backend (open):** FACT eval + `tests/test_fact.py` → **E1**
 
----
-
-## B. UX / product features to add
-
-### B1. Constraint chips + confirm — **P0**
-- [ ] Show active filters as chips: `city` · `budget` · `veg` · `metro` · `cuisine` · `area`.
-- [ ] Tap chip → remove filter → auto REFINE.
-- [ ] Before first search (optional): confirm line  
-  `Delhi · under ₹5000 · near metro — theek hai?`
-
-### B2. Post-result follow-ups — **P1**
-- [ ] After COMPLETE, offer: `Cheaper?` / `Closer to metro?` / `Veg only?` / `Restaurants instead?`
-- [ ] One-tap sends the matching refine/pivot utterance.
-
-### B3. Compare top 2 — **P1**
-- [ ] When tool returns ≥2 results, speak one contrast line  
-  (`Lotus vs Metro Inn — Lotus is closer to metro, thoda mehenga.`).
-
-### B4. Ambiguity ask — **P1**
-- [ ] If city missing and no IP city: ask `Kaunsa city?` instead of silent Delhi default.
-- [ ] If budget missing on hotel: optional ask or keep default ₹5000 (document choice).
-
-### B5. Barge-in while speaking — **P1**
-- [ ] If user starts PTT / types while TTS plays → `stopSpeaking()` + treat as new interrupt.
-- [ ] Ensure AudioContext stays unlocked.
-
-### B6. One-click judge demos — **P0**
-- [ ] Three buttons that auto-run scripts:
-  1. REFINE chain  
-  2. STATUS mid-search  
-  3. PIVOT hotel→restaurant  
-- [ ] Each ends with DebugPanel showing correct state.
-
-### B7. “Same search, new city” — **P2**
-- [ ] Utterance: `same but Mumbai` → keep budget/veg/metro, change city only.
-
-### B8. Undo last interrupt — **P2**
-- [ ] `wapas pehle wala` restores previous task params (needs small history stack).
-
-### B9. Latency badges on DebugPanel — **P2**
-- [ ] Show STT ms · tool ms · TTS ms from last turn.
-
-### B10. Save / “book first” mock — **P2**
-- [ ] After results: `book the first one` → mock confirmation spoken via Rime (no payment).
+### D3. Voice UX reliability — **DONE** · Owner: Frontend (+ Backend summaries/delay)
+- [x] **Frontend:** click-to-toggle mic, session guard, Rime-only speak, EN/HI copy
+- [x] **Backend:** shorter summaries, ~2–2.8s delay, stale-fence test retune
 
 ---
 
-## C. Precision / correctness changes
+## A. API integrations
 
-- [ ] **P0** Keep spoken answers driven by backend `last_tool_result.summary` (no divergent local fake results).
-- [ ] **P1** Improve Hinglish STT: document / try `GROQ_STT_LANGUAGE` multilingual or omit language lock.
-- [ ] **P1** Align frontend `classify()` keywords with backend `_classify_interrupt` (one shared list or shared tests).
-- [ ] **P1** Send `interrupt_type` on audio path only when needed; prefer backend as source of truth for metrics.
-- [ ] **P2** Wire or delete unused `agent/pipeline.py` + `agent/interrupt.py` LLM classifiers (avoid “dead code” judge questions).
-- [ ] **P2** Deduplicate audio history entries (audio + text duplicate user turns).
+### A3. Google Maps Geocoding — **P2 / SKIP** · Owner: **Backend**
+**Why:** Needs Google key; useless without real places.
 
----
+- [ ] Backend only if A4 lands  
+**Frontend:** none until results need map UI
 
-## D. Backend / API hardening
+### A4. Real hotel/places search — **P2** · Owner: **Backend** (primary) + **Frontend** (display)
+**Backend**
+- [ ] OSM / Places tool; area parse; price sort; mock fallback  
+**Frontend**
+- [ ] Show real fields from `last_tool_result` (no hardcoded Lotus fallback when BE returns data)
 
-- [ ] **P1** Honor and document `CORS_ORIGINS` (already partially done — verify on `dev`).
-- [ ] **P1** Session boot: never invent random UUID if `/session` fails (retry + error UI — verify on `dev`).
-- [ ] **P2** `POST /evaluate` runs or clearly points to harness (already partially done).
-- [ ] **P2** Dockerfile / compose: load `.env` reliably; document frontend+backend ports.
-- [ ] **P2** Rate-limit friendly errors already exist for Groq — mirror clear Rime-down copy.
+**Files BE:** `tools/hotel_search.py`, `tools/places.py`, `main.py`  
+**Files FE:** `voice-agent.tsx`, `copy.ts` (fallback only)
 
 ---
 
-## E. Evaluation / tests
+## B. UX / product
 
-- [ ] **P1** Keep harness **not** feeding `interrupt_type` (real classification).
-- [ ] **P1** Add FACT/Wikipedia scenarios once A2 lands.
-- [ ] **P1** Keep pytest suite green (`tests/` — 27 cases pattern).
-- [ ] **P2** Separate metric: “client-fed interrupt” vs “server-detected interrupt” if you reintroduce client hints.
-- [ ] **P2** EvalPage: show `qa_independent_results.json` if that suite is the judge source of truth.
+### B1. Constraint chips + confirm — **P0** · Owner: **Frontend**
+- [ ] Chips: `city` · `budget` · `veg` · `metro` · `cuisine` · `area`
+- [ ] Tap → remove → auto REFINE
+- [ ] Optional confirm line before first search
 
----
-
-## F. Docs / demo polish
-
-- [ ] **P0** 60-second judge script in `README.md` or `DEMO.md`.
-- [ ] **P0** Checklist: keys required (`GROQ_API_KEY`, `RIME_API_KEY`, optional `IPINFO_TOKEN`).
-- [ ] **P1** Screen recording / GIF of interrupt mid-search.
-- [ ] **P2** Architecture one-pager (STT → interrupt → tool → stale fence → TTS).
+**Files:** `voice-agent.tsx`, `copy.ts`  
+**Backend:** none (uses existing params)
 
 ---
 
-## G. Explicitly do **not** add (for now) — **SKIP**
+### B2. Post-result follow-ups — **P1** · Owner: **Frontend**
+- [ ] After COMPLETE: Cheaper? / Metro? / Veg? / Restaurants?
+- [ ] One-tap → existing refine/pivot utterances
 
-- Full Google Maps Places / Directions (unless leaving mocks)
-- Real payments / hotel booking APIs
-- Cab / flight tools (dilutes hotel+restaurant story)
-- Heavy custom LLM interrupt classifier before UX polish
-- Multi-worker Redis sessions (hackathon in-memory is fine)
+**Backend:** none
 
 ---
 
-## Suggested build order
+### B3. Compare top 2 — **P1** · Owner: **Both** (split issues)
+**Backend issue**
+- [ ] Build contrast line in `summary` when `count >= 2`  
+**Frontend issue**
+- [ ] Fallback copy if summary missing; keep TTS short
 
-1. **IPInfo greeting** (A1) + **judge demo buttons** (B6)  
-2. **Wikipedia FACT interrupt** (A2)  
-3. **Constraint chips + confirm** (B1) + **follow-ups** (B2)  
-4. Compare top 2 (B3) · barge-in (B5) · STT Hinglish (C)  
-5. Only then reconsider Geocoding (A3)
-
----
-
-## Quick “definition of done” for each new feature
-
-- [ ] Works with push-to-talk **and** text  
-- [ ] Hinglish-aware short spoken line  
-- [ ] Loading/error feedback within ~1s  
-- [ ] Does not break REFINE / CANCEL / STATUS / PIVOT / stale fencing  
-- [ ] DebugPanel still truthful  
-- [ ] At least one test or eval scenario if it changes interrupt/tool behavior  
+**Files BE:** `hotel_search.py`, `restaurant_search.py`  
+**Files FE:** `copy.ts`, `voice-agent.tsx`
 
 ---
 
-*Last dumped for VaaniAgent enhancement planning. Edit this file as items ship — move done items to a “Done” section or delete them.*
+### B4. Ambiguity ask — **P1** · Owner: **Both**
+**Backend**
+- [ ] Signal “city required” / don’t silently invent city when no preferred_city  
+**Frontend**
+- [ ] Speak `Kaunsa city?` / budget ask; wait for user before `runTool`
+
+---
+
+### B5. Barge-in while speaking — **P1** · Owner: **Frontend**
+- [ ] Mic / type while TTS → `stopSpeaking()` + new interrupt
+- [ ] AudioContext stays unlocked
+
+**Files:** `speak.ts`, `PushToTalk.tsx`, `voice-agent.tsx`  
+**Backend:** none
+
+---
+
+### B6. One-click judge demos — **P0** · Owner: **Frontend**
+- [ ] Scripts: REFINE · STATUS · FACT · PIVOT
+- [ ] DebugPanel shows correct state after each
+
+**Files:** `voice-agent.tsx`, `lib/demos.ts`  
+**Backend:** none (uses live APIs)
+
+---
+
+### B7. Same search, new city — **P2** · Owner: **Both**
+**Backend:** parse “same but Mumbai” → keep other params  
+**Frontend:** classify / chip optional
+
+---
+
+### B8. Undo last interrupt — **P2** · Owner: **Both**
+**Backend:** param history stack  
+**Frontend:** utterance + speak restore
+
+---
+
+### B9. Latency badges — **P2** · Owner: **Both**
+**Backend:** return timing fields on message / tool result  
+**Frontend:** DebugPanel badges
+
+---
+
+### B10. Mock “book first” — **P2** · Owner: **Both**
+**Backend:** optional confirm endpoint or tool result flag  
+**Frontend:** utter + speak mock booking line
+
+---
+
+### B11. Prefetch / reduce silence — **P1** · Owner: **Frontend**
+- [ ] Polish ack → COMPLETE gap (same Rime voice only; no browser bridge)
+- [ ] Honest searching pulse
+
+**Files:** `voice-agent.tsx`, `speak.ts`  
+**Backend:** none (delay already tuned)
+
+---
+
+## C. Precision / correctness
+
+| Item | Pri | Owner | Notes |
+|------|-----|-------|--------|
+| Spoken from BE `last_tool_result.summary` | DONE | Both | Shipped |
+| `GROQ_STT_LANGUAGE=auto` | DONE | Backend | `.env.example` |
+| Align `classify()` ↔ `_classify_interrupt` | P1 | **Both** | Shared list or paired tests |
+| Prefer BE `interrupt_type` on audio | P1 | **Frontend** | Metrics honesty |
+| Wire/delete unused LLM pipeline | P2 | **Backend** | `agent/pipeline.py` etc. |
+| Dedupe audio history turns | P2 | **Backend** | `/message` history |
+| Document mock inventory | P1 | **Docs** | README |
+
+---
+
+## D. Backend / API hardening · Owner: **Backend** (unless noted)
+
+| Item | Pri | Owner |
+|------|-----|-------|
+| Verify `CORS_ORIGINS` on deploy | P1 | Backend |
+| Session retry + error UI | DONE | Frontend (+ BE) |
+| `/evaluate` → harness docs | P2 | Backend + Docs |
+| Docker / compose `.env` + ports | P2 | Backend + Docs |
+| Rime-down user copy | P2 | Backend + **Frontend** banner |
+| Pyright config + log_event types | DONE | Backend |
+
+---
+
+## E. Evaluation / tests · Owner: **Backend** (EvalPage = Frontend)
+
+| Item | Pri | Owner |
+|------|-----|-------|
+| Harness must not feed `interrupt_type` | P1 | Backend |
+| FACT scenarios in `scenarios.json` | P1 | Backend |
+| `tests/test_fact.py` | P1 | Backend |
+| Keep pytest green | P1 | Backend |
+| EvalPage FACT / qa JSON | P2 | **Frontend** |
+
+---
+
+## F. Docs / demo polish · Owner: **Docs**
+
+| Item | Pri | Owner |
+|------|-----|-------|
+| 60s judge script (`DEMO.md`) incl. FACT + greeting | P0 | Docs |
+| Key checklist | P0 | Docs |
+| Screen recording / GIF | P1 | Docs (anyone) |
+| Architecture one-pager | P2 | Docs |
+
+---
+
+## H. Code health · Owner by area
+
+### H1. Split `voice-agent.tsx` — **P1** · Owner: **Frontend**
+- [ ] Extract greeting, FACT/submit, demos, parse/classify
+
+### H2. Shared interrupt keywords — **P1** · Owner: **Both**
+- [ ] TS source + Python tests mirror, or document FE mirrors BE
+
+### H3. Cold `pnpm dev` — **P2** · Owner: **Frontend**
+- [ ] Trim unused deps later; Defender exclude; **SKIP** SPA rewrite mid-hackathon
+
+### H4. `copy.ts` EN/HI audit — **P2** · Owner: **Frontend**
+- [ ] Short lines; every new string has `hi` + default `en`
+
+---
+
+## G. Do **not** add — **SKIP**
+
+- Full Google Places / payments / cab-flight tools  
+- Heavy LLM interrupt classifier before UX polish  
+- Redis multi-worker sessions  
+- Browser TTS bridge while waiting on Rime  
+
+---
+
+## How to open GitHub issues (template)
+
+**Frontend-only example**
+```markdown
+## Owner
+Frontend
+
+## Summary
+…
+
+## Scope
+- [ ] …
+
+## Out of scope
+Backend API changes
+
+## Files
+- frontend/src/…
+```
+
+**Backend-only example**
+```markdown
+## Owner
+Backend
+
+## Summary
+…
+
+## Scope
+- [ ] …
+
+## Out of scope
+UI / Rime playback
+
+## Files
+- backend/…
+```
+
+**Both — open 2 issues linked**
+1. `feat(backend): …` — API / summary / tests  
+2. `feat(frontend): …` — speak / chips / Depends on #backend-issue  
+
+---
+
+## Suggested build order (demo day)
+
+1. **Frontend:** B1 chips + B6 judge demos  
+2. **Frontend:** B5 barge-in + B11 silence polish  
+3. **Both/Backend:** B3 compare top 2 + E1 FACT tests  
+4. **Frontend:** B2 follow-ups · **Both:** B4 ambiguity · C classify sync  
+5. **Docs:** F 60s script  
+6. **Backend:** A4 real places only if needed  
+
+---
+
+## Definition of done
+
+- [ ] Works with mic **and** text  
+- [ ] EN + HI short copy  
+- [ ] Feedback within ~1s  
+- [ ] Does not break REFINE / CANCEL / STATUS / PIVOT / FACT / stale fence  
+- [ ] DebugPanel truthful  
+- [ ] Test or eval scenario if interrupt/tool behavior changes  
+- [ ] Issue labeled `frontend` / `backend` / `docs` + priority  
+
+---
+
+## Demo-day minimum
+
+| Must show | Feature | Owner |
+|-----------|---------|-------|
+| City opener | IPInfo greeting | Done (Both) |
+| Interrupt | REFINE / CANCEL / STATUS | Done |
+| Aside | FACT Wikipedia | Done core; tests = Backend |
+| Voice | One Rime voice, click mic | Done (Frontend) |
+| Polish next | Chips B1 + demos B6 | **Frontend** |
+
+---
+
+*Owners are for GitHub assignment. Prefer small single-owner issues; use **Both** only when the API contract must land first.*

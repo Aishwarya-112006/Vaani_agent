@@ -15,6 +15,7 @@ import {
   errNetwork,
   errSttEmpty,
   errTts,
+  factFallback,
   greetCity,
   phaseLabel,
   resultHotels,
@@ -33,7 +34,7 @@ import { PushToTalk } from "./PushToTalk";
 import { SiteHeader } from "./site-header";
 import { Transcript, type Turn } from "./Transcript";
 
-type Interrupt = "REFINE" | "CANCEL" | "STATUS" | "PIVOT";
+type Interrupt = "REFINE" | "CANCEL" | "STATUS" | "PIVOT" | "FACT";
 type ToolStatus = "IDLE" | "RUNNING" | "CANCELLED" | "COMPLETE";
 type Task = { type: "hotel" | "restaurant"; params: string; tool_call_id: string };
 export type { Turn };
@@ -47,6 +48,7 @@ const chips = [
   "Find hotels in Delhi under ₹5000",
   "Actually, only vegetarian and near a metro",
   "What are you searching for?",
+  "What is Connaught Place?",
   "Forget it",
   "Find restaurants in Connaught Place instead",
 ];
@@ -97,6 +99,12 @@ const interruptCards: {
     description: "Answer immediately while the original search keeps running.",
   },
   {
+    type: "FACT",
+    accent: "cyan",
+    utterance: "What is Connaught Place?",
+    description: "Wikipedia aside — speak a fact without cancelling the search.",
+  },
+  {
     type: "PIVOT",
     accent: "amber",
     utterance: "Find restaurants there instead.",
@@ -111,6 +119,8 @@ function now() {
 function classify(text: string, task: Task | null): Interrupt | null {
   const s = text.toLowerCase();
   if (/what are you|are you still|how long|status/.test(s)) return "STATUS";
+  // Side-question (Wikipedia) — do not fence search
+  if (/\b(what is|tell me about|who is|kya hai|kya hota)\b|\bbatao\b/.test(s)) return "FACT";
   if (/forget it|never mind|stop searching|cancel|stop it/.test(s)) return "CANCEL";
   if (
     task &&
@@ -488,6 +498,27 @@ export function VoiceAgent() {
 
       const type = classify(text, task);
 
+      // FACT: ask backend for Wikipedia summary; never fence / start a new tool
+      if (type === "FACT") {
+        setInterrupt("FACT");
+        pushLog("interrupt", "FACT · search continues (Wikipedia aside)");
+        if (session && session !== "pending") {
+          void sendTextMessage(session, text, "FACT")
+            .then((res) => {
+              if (res.reply_lang) setLang(asReplyLang(res.reply_lang));
+              const line = res.fact_summary?.trim() || factFallback(asReplyLang(res.reply_lang));
+              addAssistant(line);
+              if (toolRunningRef.current) {
+                setPipeline("searching", searchFiller(searchTick.current, replyLangRef.current));
+              }
+            })
+            .catch((err) => failLoud(errNetwork(err instanceof Error ? err.message : undefined)));
+        } else {
+          addAssistant(factFallback(replyLangRef.current));
+        }
+        return;
+      }
+
       if (session && session !== "pending") {
         void sendTextMessage(session, text, type)
           .then((res) => {
@@ -602,8 +633,7 @@ export function VoiceAgent() {
           const city = (created.detected_city || "Delhi").trim() || "Delhi";
           preferredCityRef.current = city;
           setPreferredCity(city);
-          const greeting =
-            created.greeting?.trim() || greetCity(city, replyLangRef.current);
+          const greeting = created.greeting?.trim() || greetCity(city, replyLangRef.current);
           setCityPrompt({
             open: true,
             changing: false,
@@ -827,7 +857,7 @@ export function VoiceAgent() {
                 setSendingAudio(busy);
                 if (busy) setPipeline("uploading");
               }}
-              onSent={({ turn_id, transcript, interrupt_type, reply_lang }) => {
+              onSent={({ turn_id, transcript, interrupt_type, reply_lang, fact_summary }) => {
                 const spoken = transcript?.trim();
                 if (!spoken) {
                   failLoud(errSttEmpty());
@@ -847,6 +877,19 @@ export function VoiceAgent() {
 
                 const type = (interrupt_type as Interrupt | null) || classify(spoken, task);
                 setInterrupt(type);
+
+                if (type === "FACT") {
+                  pushLog("interrupt", "FACT · search continues (Wikipedia aside)");
+                  const line = fact_summary?.trim() || factFallback(asReplyLang(reply_lang));
+                  addAssistant(line);
+                  if (toolRunningRef.current || status === "RUNNING") {
+                    setPipeline(
+                      "searching",
+                      searchFiller(searchTick.current, replyLangRef.current),
+                    );
+                  }
+                  return;
+                }
 
                 if (status === "RUNNING" && type === "STATUS") {
                   pushLog("interrupt", "STATUS · tool continues running");

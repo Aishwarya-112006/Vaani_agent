@@ -172,6 +172,16 @@ export function voiceBridge(lang: ReplyLang = "en"): string {
   return lang === "hi" ? "Ek second…" : "One second…";
 }
 
+export function factFallback(lang: ReplyLang = "en"): string {
+  return lang === "hi"
+    ? "Woh nahi mila — search continue kar rahi hoon."
+    : "Sorry, I couldn't find that — search is still running.";
+}
+
+export function factLabel(lang: ReplyLang = "en"): string {
+  return lang === "hi" ? "Fact aside" : "Quick fact";
+}
+
 export function greetCity(city: string, lang: ReplyLang = "en"): string {
   const name = city.trim() || "Delhi";
   return lang === "hi" ? `Namaste! ${name} ke paas search karein?` : `Hi! Searching near ${name}?`;
