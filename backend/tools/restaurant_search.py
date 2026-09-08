@@ -13,6 +13,8 @@ import random
 import re
 from typing import Any, Optional
 
+from tools.cities import extract_city, is_known_city_token
+
 logger = logging.getLogger(__name__)
 
 # Artificial latency window (seconds) — same as search_hotels
@@ -107,20 +109,6 @@ _AREAS = [
     "indiranagar",
 ]
 
-_CITIES = [
-    "delhi",
-    "mumbai",
-    "bangalore",
-    "bengaluru",
-    "hyderabad",
-    "chennai",
-    "pune",
-    "kolkata",
-    "goa",
-    "jaipur",
-]
-
-
 def parse_restaurant_params(
     text: str,
     previous: Optional[dict] = None,
@@ -135,7 +123,7 @@ def parse_restaurant_params(
 
     s = (text or "").lower()
 
-    city = next((c.title() if c != "bengaluru" else "Bangalore" for c in _CITIES if c in s), None)
+    city = extract_city(s)
 
     cuisine = None
     for key, label in _CUISINES:
@@ -156,7 +144,7 @@ def parse_restaurant_params(
         )
         if area_match:
             candidate = area_match.group(1).strip()
-            if candidate.lower() not in _CITIES:
+            if not is_known_city_token(candidate):
                 area = candidate.title()
 
     veg_only = prev.get("veg_only", False)

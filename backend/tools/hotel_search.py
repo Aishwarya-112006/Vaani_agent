@@ -13,6 +13,8 @@ import random
 import re
 from typing import Any, Optional
 
+from tools.cities import extract_city
+
 logger = logging.getLogger(__name__)
 
 # Artificial latency window (seconds) — short enough for demo UX, still interruptible
@@ -78,19 +80,7 @@ def parse_hotel_params(
     prev = dict(previous or {})
     s = (text or "").lower()
 
-    cities = [
-        "delhi",
-        "mumbai",
-        "bangalore",
-        "bengaluru",
-        "hyderabad",
-        "chennai",
-        "pune",
-        "kolkata",
-        "goa",
-        "jaipur",
-    ]
-    city = next((c.title() if c != "bengaluru" else "Bangalore" for c in cities if c in s), None)
+    city = extract_city(s)
 
     budget_match = re.search(r"(?:under|below|upto|up to|₹|rs\.?)\s*(\d{3,6})", s, re.I)
     if not budget_match:

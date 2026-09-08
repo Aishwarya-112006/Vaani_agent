@@ -214,7 +214,8 @@ async def _finalize_tool_result(
 def _restaurant_signal(text: str) -> bool:
     return bool(
         re.search(
-            r"\brestaurants?\b|food|eat|dinner|lunch|breakfast|cafe|cuisine|thali|dining",
+            # Include common typo "resturant"
+            r"\brestaurants?\b|\bresturants?\b|food|eat|dinner|lunch|breakfast|cafe|cuisine|thali|dining",
             (text or "").lower(),
         )
     )

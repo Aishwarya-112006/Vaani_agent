@@ -15,7 +15,7 @@ export type ClassifyTask = {
 const STATUS_RE = /what are you|are you still|how long|status/;
 const FACT_RE = /\b(what is|tell me about|who is|kya hai|kya hota)\b|\bbatao\b/;
 const CANCEL_RE = /forget it|never mind|stop searching|cancel|stop it/;
-const RESTAURANT_RE = /restaurant|food|eat|dinner|cafe|cuisine|thali|lunch|breakfast/;
+const RESTAURANT_RE = /restaurants?|resturants?|food|eat|dinner|cafe|cuisine|thali|lunch|breakfast/;
 const HOTEL_RE = /\bhotels?\b|\bstay\b|\broom\b|\brooms?\b|lodging|accommodation|resort/;
 const REFINE_RE = /actually|only|vegetarian|veg|under|metro|near|rupees|₹|cuisine|area|same\s+(but|search)/;
 
