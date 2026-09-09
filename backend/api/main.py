@@ -34,7 +34,7 @@ from tools.ipinfo import (
 )
 from tools.hotel_search import parse_hotel_params, search_hotels
 from tools.restaurant_search import parse_restaurant_params, search_restaurants
-from tools.wikipedia import fetch_wiki_summary
+from tools.wikipedia import clean_wiki_query, fetch_wiki_summary
 
 
 # Structured JSON logger
@@ -413,10 +413,7 @@ async def handle_message(
     # FACT: answer side question without cancelling tool
     if classified == "FACT":
         reply_lang = getattr(state, "reply_lang", "en") or "en"
-        import re as _re
-        query = (text or "").strip()
-        query = _re.sub(r"(?i)^(what is|tell me about|who is|kya hai|kya hota|batao)\s+", "", query)
-        query = _re.sub(r"(?i)^the\s+", "", query).strip()
+        query = clean_wiki_query(text or "")
         fact_summary = await fetch_wiki_summary(query, reply_lang)
         state.last_interrupt_type = "FACT"
         log_event("interrupt_fact", session_id=session_id, turn_id=state.turn_id)

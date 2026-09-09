@@ -52,7 +52,7 @@ Use this as the single checklist before demo day — and to **split GitHub issue
 | B8 | P2 | **Both** | `feat: undo last interrupt` |
 | B9 | P2 | **Both** | `feat: DebugPanel latency badges (STT/tool/TTS ms)` |
 | B10 | P2 | **Both** | `feat: mock book first hotel confirmation` |
-| A4 | P2 | **Backend** (+ FE display) | `feat(backend): real places/hotel search (OSM) with mock fallback` |
+| A4 | P2 | **Backend** (+ FE display) | `feat(backend): real places/hotel search (OSM) with mock fallback` · **DONE** |
 | A3 | SKIP/P2 | **Backend** | Geocoding only if A4 ships |
 | E3 | P2 | **Frontend** | `feat(frontend): EvalPage FACT / qa_independent results` |
 | H3 | P2 | **Frontend** | `chore(frontend): trim deps / cold-start notes` |
@@ -86,14 +86,18 @@ Use this as the single checklist before demo day — and to **split GitHub issue
 - [ ] Backend only if A4 lands  
 **Frontend:** none until results need map UI
 
-### A4. Real hotel/places search — **P2** · Owner: **Backend** (primary) + **Frontend** (display)
+### A4. Real hotel/places search — **DONE (opt-in)** · Owner: **Backend** + **Frontend**
 **Backend**
-- [ ] OSM / Places tool; area parse; price sort; mock fallback  
+- [x] Geoapify/OSM Places via `tools/real_places.py`; adapter in hotel/restaurant tools
+- [x] Mock fallback when `USE_LIVE_PLACES=0` / API miss; cancelable live delay
+- [x] Honest `budget_note` when live prices unavailable
 **Frontend**
-- [ ] Show real fields from `last_tool_result` (no hardcoded Lotus fallback when BE returns data)
+- [x] Embedded Leaflet map on `/` after COMPLETE (`ResultsMap` + `lat`/`lon`)
+- [x] DebugPanel `places_source`; late WS map refresh
 
-**Files BE:** `tools/hotel_search.py`, `tools/places.py`, `main.py`  
-**Files FE:** `voice-agent.tsx`, `copy.ts` (fallback only)
+**Enable:** `GEOAPIFY_API_KEY` + `USE_LIVE_PLACES=1` in `backend/.env`  
+**Files BE:** `tools/real_places.py`, `hotel_search.py`, `restaurant_search.py`, `main.py`  
+**Files FE:** `ResultsMap.tsx`, `voice-agent.tsx`, `copy.ts`, `DebugPanel.tsx`
 
 ---
 
@@ -322,7 +326,7 @@ UI / Rime playback
 | ID | Pri | Owner | Status |
 |----|-----|-------|--------|
 | B8 | P2 | Both | Undo last interrupt — **leave** (nice-to-have) |
-| A4 / A3 | P2/SKIP | Backend | Real OSM places — **leave** (mock is demo-honest) |
+| A4 / A3 | P2 | Backend | Real OSM places — **DONE** (Geoapify + map; mock fallback; `USE_LIVE_PLACES=1`) |
 | H1 | P1 | Frontend | Split `voice-agent.tsx` — **leave** (refactor only) |
 | H3 / H4 | P2 | Frontend | Dep trim / copy audit — **leave** |
 | D2–D4 | P2 | Backend/Docs | Docker / Rime-down — **leave** |

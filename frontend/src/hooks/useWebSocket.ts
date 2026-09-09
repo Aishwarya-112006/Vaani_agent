@@ -7,8 +7,11 @@ export type ToolResult = {
   count?: number;
   results?: unknown[];
   params?: Record<string, unknown>;
-  delay_seconds?: number;
+  delay_seconds?: number | null;
   reply_lang?: string;
+  source?: string;
+  budget_note?: string | null;
+  budget_filtered?: boolean;
 };
 
 export type AgentState = {

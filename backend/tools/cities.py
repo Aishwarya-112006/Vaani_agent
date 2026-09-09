@@ -31,16 +31,29 @@ _CITY_ALIASES: list[tuple[str, tuple[str, ...]]] = [
 
 
 def extract_city(text: str) -> Optional[str]:
-    """Return canonical city if any known name/alias appears in text."""
+    """Return canonical city if any known name/alias appears in text.
+
+    When multiple cities are mentioned (e.g. \"Bangalore wait Jaipur\"), prefer the
+    **last** occurrence — that's usually the correction the user meant.
+    """
     s = (text or "").lower()
     if not s:
         return None
-    # Longer aliases first so "new delhi" wins over "delhi" when both listed
+    # (end_index, alias_len, canonical) — latest end wins; longer alias breaks ties
+    best: Optional[tuple[int, int, str]] = None
     for canonical, aliases in _CITY_ALIASES:
-        for alias in sorted(aliases, key=len, reverse=True):
-            if alias in s:
-                return canonical
-    return None
+        for alias in aliases:
+            start = 0
+            while True:
+                idx = s.find(alias, start)
+                if idx < 0:
+                    break
+                end = idx + len(alias)
+                cand = (end, len(alias), canonical)
+                if best is None or cand[0] > best[0] or (cand[0] == best[0] and cand[1] > best[1]):
+                    best = cand
+                start = idx + 1
+    return best[2] if best else None
 
 
 def is_known_city_token(token: str) -> bool:

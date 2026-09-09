@@ -1,8 +1,8 @@
-"""Interruptible mock restaurant search tool.
+"""Interruptible restaurant search tool.
 
-`search_restaurants` sleeps ~2–2.8 seconds (cancellable via asyncio task cancel),
-then returns structured mock results. Cancellation raises CancelledError
-so callers can treat the delay as interruptible — same behavior as search_hotels.
+Default: mock inventory with ~2–2.8s cancelable delay (demo/eval).
+Optional: Geoapify live Places when USE_LIVE_PLACES=1 and GEOAPIFY_API_KEY
+are set — same return shape, mock fallback on miss/error.
 """
 
 from __future__ import annotations
@@ -20,6 +20,11 @@ from tools.mock_inventory import (
     default_area_for_city,
     normalize_city_key,
     restaurants_for_city,
+)
+from tools.real_places import (
+    enrich_with_coords,
+    live_places_enabled,
+    live_restaurants,
 )
 
 logger = logging.getLogger(__name__)
@@ -158,40 +163,18 @@ def parse_restaurant_params(
     }
 
 
-async def search_restaurants(
-    city: str,
-    cuisine: str | None = "Indian",
-    veg_only: bool = False,
-    area: str | None = None,
+async def _mock_search_restaurants(
+    city_key: str,
+    city_name: str,
+    cuisine_name: str,
+    veg_only: bool,
+    area_name: str,
+    near_metro: bool,
+    area_explicit: bool,
     *,
-    near_metro: bool = False,
-    area_explicit: bool = False,
-    delay: float | None = None,
-    reply_lang: str = "en",
+    wait: float,
+    reply_lang: str,
 ) -> dict[str, Any]:
-    """Search mock restaurants after an interruptible artificial delay.
-
-    Raises:
-        asyncio.CancelledError: if the surrounding task is cancelled mid-delay
-            (REFINE / CANCEL / PIVOT interrupt).
-    """
-    city_key = normalize_city_key(city)
-    city_name = city_key
-    cuisine_name = (cuisine or "Indian").strip()
-    area_name = (area or default_area_for_city(city_key)).strip()
-    wait = delay if delay is not None else random.uniform(MIN_DELAY, MAX_DELAY)
-
-    logger.info(
-        "search_restaurants start city=%s cuisine=%s veg_only=%s area=%s near_metro=%s delay=%.2fs lang=%s",
-        city_name,
-        cuisine_name,
-        veg_only,
-        area_name,
-        near_metro,
-        wait,
-        reply_lang,
-    )
-
     await asyncio.sleep(wait)
 
     cuisine_l = cuisine_name.lower()
@@ -231,7 +214,6 @@ async def search_restaurants(
             }
         )
 
-    # Prefer metro matches when requested; hard-drop only if we still have enough hits
     if near_metro:
         metro_hits = [r for r in results if r["_metro_match"]]
         if len(metro_hits) >= 2:
@@ -265,16 +247,20 @@ async def search_restaurants(
         ]
 
     top = [{k: v for k, v in r.items() if not k.startswith("_")} for r in results[:3]]
+    top = await enrich_with_coords(top, city=city_name)
 
     picks = ", ".join(f"{h['name']} ({h['area']})" for h in top)
     contrast = ""
     if len(top) >= 2:
         a, b = top[0], top[1]
-        contrast = (
-            f" Compare: {a['name']} ₹{a['price_for_two']}/2 vs {b['name']} ₹{b['price_for_two']}/2."
-        )
+        a_p, b_p = a.get("price_for_two"), b.get("price_for_two")
+        if a_p is not None and b_p is not None:
+            contrast = (
+                f" Compare: {a['name']} ₹{a_p}/2 vs {b['name']} ₹{b_p}/2."
+            )
+        else:
+            contrast = f" Compare: {a['name']} vs {b['name']}."
 
-    # City-wide: lead with city; area-specific: lead with area
     place_lead = f"{area_name}, {city_name}" if area_explicit else city_name
     metro_bit = " near metro" if near_metro else ""
     summary = (
@@ -299,7 +285,223 @@ async def search_restaurants(
         "summary": summary,
         "reply_lang": reply_lang,
         "delay_seconds": round(wait, 2),
+        "source": "mock",
     }
-
-    logger.info("search_restaurants complete count=%s top=%s", len(top), top[0]["name"])
+    logger.info(
+        "search_restaurants complete source=mock count=%s top=%s",
+        len(top),
+        top[0]["name"],
+    )
     return payload
+
+
+def _rows_from_live_restaurants(
+    places: list[dict[str, Any]],
+    *,
+    city_name: str,
+    cuisine_name: str,
+    veg_only: bool,
+    area_name: str,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for p in places:
+        area = (p.get("area") or "").strip() or area_name or city_name
+        rows.append(
+            {
+                "name": p.get("name") or "Restaurant",
+                "city": p.get("city") or city_name,
+                "area": area,
+                "cuisine": cuisine_name,
+                "rating": None,
+                "veg_only": veg_only,
+                "price_for_two": None,
+                "open_now": None,
+                "near_metro": bool(p.get("near_metro", False)),
+                "lat": p.get("lat"),
+                "lon": p.get("lon"),
+                "distance_m": p.get("distance_m"),
+                "address": p.get("address") or "",
+                "metro_distance_m": p.get("metro_distance_m"),
+                "metro_name": p.get("metro_name"),
+            }
+        )
+    return rows[:3]
+
+
+def _live_restaurant_summary(
+    top: list[dict[str, Any]],
+    *,
+    city_name: str,
+    cuisine_name: str,
+    veg_only: bool,
+    area_name: str,
+    area_explicit: bool,
+    near_metro: bool,
+) -> str:
+    picks = ", ".join(f"{h['name']} ({h['area']})" for h in top)
+    contrast = ""
+    if len(top) >= 2:
+        contrast = f" Compare: {top[0]['name']} vs {top[1]['name']}."
+    place_lead = f"{area_name}, {city_name}" if area_explicit and area_name else city_name
+    metro_bit = " near metro" if near_metro else ""
+    return (
+        f"{place_lead}{metro_bit} — {len(top)} restaurants"
+        + (f", {cuisine_name}" if cuisine_name else "")
+        + (" · veg" if veg_only else "")
+        + f". {picks}.{contrast}"
+    )
+
+
+async def search_restaurants(
+    city: str,
+    cuisine: str | None = "Indian",
+    veg_only: bool = False,
+    area: str | None = None,
+    *,
+    near_metro: bool = False,
+    area_explicit: bool = False,
+    delay: float | None = None,
+    reply_lang: str = "en",
+) -> dict[str, Any]:
+    """Search restaurants (live Geoapify when enabled, else mock).
+
+    Raises:
+        asyncio.CancelledError: if the surrounding task is cancelled mid-await
+            (REFINE / CANCEL / PIVOT interrupt).
+    """
+    city_key = normalize_city_key(city)
+    city_name = city_key
+    cuisine_name = (cuisine or "Indian").strip()
+    area_name = (area or default_area_for_city(city_key)).strip()
+    wait = delay if delay is not None else random.uniform(MIN_DELAY, MAX_DELAY)
+
+    logger.info(
+        "search_restaurants start city=%s cuisine=%s veg_only=%s area=%s near_metro=%s live=%s lang=%s",
+        city_name,
+        cuisine_name,
+        veg_only,
+        area_name,
+        near_metro,
+        live_places_enabled(),
+        reply_lang,
+    )
+
+    if live_places_enabled():
+        try:
+            # Cancelable pause so REFINE/CANCEL still have a demo window under live.
+            live_wait = delay if delay is not None else random.uniform(1.6, 2.2)
+            await asyncio.sleep(live_wait)
+            places = await live_restaurants(
+                city_name,
+                cuisine=cuisine_name,
+                veg_only=veg_only,
+                area=area_name if area_explicit else None,
+                near_metro=near_metro,
+                limit=15,
+            )
+            if places:
+                top = _rows_from_live_restaurants(
+                    places,
+                    city_name=city_name,
+                    cuisine_name=cuisine_name,
+                    veg_only=veg_only,
+                    area_name=area_name,
+                )
+                budget_note = (
+                    "Live OSM listings usually omit prices and ratings — "
+                    "showing nearby matches"
+                    + (" with a vegetarian filter where tagged." if veg_only else ".")
+                )
+                payload = {
+                    "tool": "search_restaurants",
+                    "params": {
+                        "city": city_name,
+                        "cuisine": cuisine_name,
+                        "veg_only": veg_only,
+                        "area": area_name,
+                        "near_metro": near_metro,
+                        "area_explicit": area_explicit,
+                    },
+                    "count": len(top),
+                    "results": top,
+                    "summary": _live_restaurant_summary(
+                        top,
+                        city_name=city_name,
+                        cuisine_name=cuisine_name,
+                        veg_only=veg_only,
+                        area_name=area_name,
+                        area_explicit=area_explicit,
+                        near_metro=near_metro,
+                    ),
+                    "reply_lang": reply_lang,
+                    "delay_seconds": round(live_wait, 2),
+                    "source": "geoapify+osm",
+                    "budget_note": budget_note,
+                }
+                logger.info(
+                    "search_restaurants complete source=live count=%s top=%s",
+                    len(top),
+                    top[0]["name"],
+                )
+                return payload
+            logger.info(
+                "search_restaurants live empty for city=%s — no mock while live mode on",
+                city_name,
+            )
+            return {
+                "tool": "search_restaurants",
+                "params": {
+                    "city": city_name,
+                    "cuisine": cuisine_name,
+                    "veg_only": veg_only,
+                    "area": area_name,
+                    "near_metro": near_metro,
+                    "area_explicit": area_explicit,
+                },
+                "count": 0,
+                "results": [],
+                "summary": (
+                    f"No live restaurants found near {city_name}"
+                    + (" / metro" if near_metro else "")
+                    + ". Try another area."
+                ),
+                "reply_lang": reply_lang,
+                "delay_seconds": round(live_wait, 2),
+                "source": "geoapify+osm",
+                "budget_note": "Live OSM search returned no matches — mock inventory is disabled while USE_LIVE_PLACES=1.",
+            }
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("search_restaurants live failed (no mock): %s", exc)
+            return {
+                "tool": "search_restaurants",
+                "params": {
+                    "city": city_name,
+                    "cuisine": cuisine_name,
+                    "veg_only": veg_only,
+                    "area": area_name,
+                    "near_metro": near_metro,
+                    "area_explicit": area_explicit,
+                },
+                "count": 0,
+                "results": [],
+                "summary": f"Live restaurant search failed for {city_name}. Check Geoapify key / network.",
+                "reply_lang": reply_lang,
+                "delay_seconds": None,
+                "source": "geoapify+osm",
+                "budget_note": str(exc)[:160],
+            }
+
+    return await _mock_search_restaurants(
+        city_key,
+        city_name,
+        cuisine_name,
+        veg_only,
+        area_name,
+        near_metro,
+        area_explicit,
+        wait=wait,
+        reply_lang=reply_lang,
+    )
+
