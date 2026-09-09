@@ -1,0 +1,75 @@
+{
+  "findings": [
+    {
+      "ok": true,
+      "label": "page loads",
+      "detail": "http://localhost:8080 status=200"
+    },
+    {
+      "ok": true,
+      "label": "session created (no error banner)",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "Live conversation card visible",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "interrupt chip REFINE",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "interrupt chip STATUS",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "interrupt chip FACT",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "interrupt chip PIVOT",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "interrupt chip CANCEL",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "city Yes clicked",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "submitted mock hotel search",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "STATUS interrupt clicked mid-search",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "search progressed (map or next chips)",
+      "detail": "map"
+    },
+    {
+      "ok": true,
+      "label": "change city → Delhi",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "no city=Actually pollution in filters",
+      "detail": ""
+    }
+  ],
+  "failed": 0
+}

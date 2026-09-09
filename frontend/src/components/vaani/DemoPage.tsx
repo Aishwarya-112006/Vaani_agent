@@ -8,27 +8,27 @@ const STEPS = [
   {
     n: "01",
     title: "Confirm city",
-    body: "Yes on the greeting — or Change city. Preferred city is set only after confirm.",
+    body: "Yes on the greeting — or Change city. Only known cities are accepted (no Actually / metro pollution).",
   },
   {
     n: "02",
     title: "Start a search",
-    body: "Find hotels in Delhi under ₹5000 — confirm line, then honest searching pulse after ack TTS.",
+    body: "Find hotels in Delhi under ₹5000 — confirm line, searching pulse (~4–5s window). Live map opens on the left.",
   },
   {
     n: "03",
     title: "Interrupt mid-flight",
-    body: "Actually, only vegetarian and near a metro → REFINE. Or tap Demo · REFINE / STATUS / FACT / PIVOT.",
+    body: "Tap REFINE / STATUS / FACT / PIVOT / CANCEL in the conversation card (always visible), or type Actually, near metro. Or use Demo · chips below.",
   },
   {
     n: "04",
     title: "After COMPLETE",
-    body: "Cheaper? · Metro? · Veg? · Restaurants? · Book first? — one-tap refine / pivot / mock book.",
+    body: "Cheaper? · Metro? · Veg? · Restaurants? · Book first? · Same · Mumbai — one-tap refine / pivot / mock book.",
   },
   {
     n: "05",
     title: "Show the judge panel",
-    body: "turn_id · tool_status · interrupt_type · stale_discarded — live over WebSocket.",
+    body: "turn_id · tool_status · interrupt_type · stale_discarded · places_source · tool_delay — live over WebSocket.",
   },
 ];
 
@@ -36,6 +36,9 @@ const KEYS = [
   { key: "GROQ_API_KEY", use: "Mic STT (Whisper)" },
   { key: "RIME_API_KEY", use: "Spoken voice (TTS)" },
   { key: "IPINFO_TOKEN", use: "City greeting (optional)" },
+  { key: "GEOAPIFY_API_KEY", use: "Map pins / live places (optional)" },
+  { key: "USE_LIVE_PLACES", use: "0 = mock demo · 1 = live OSM (no mock fallback)" },
+  { key: "VITE_API_URL", use: "frontend/.env.local — must match backend PORT" },
 ];
 
 export function DemoPage() {
@@ -66,9 +69,10 @@ export function DemoPage() {
           transition={{ delay: 0.15 }}
           className="mt-4 max-w-2xl leading-7 text-muted-foreground"
         >
-          Hotel and restaurant rows are <strong className="text-foreground">mock inventory</strong>.
-          Interrupts, stale fencing, Groq STT, Rime TTS, and Wikipedia FACT are live. Full notes in{" "}
-          <span className="font-mono text-foreground">DEMO.md</span>.
+          Default results are <strong className="text-foreground">mock inventory</strong> (~4–5s so
+          interrupts are visible). Set <code className="text-foreground">USE_LIVE_PLACES=1</code> for
+          live OSM (no mock fallback). Interrupts, stale fencing, Groq STT, Rime TTS, and Wikipedia FACT
+          are live. Full notes in <span className="font-mono text-foreground">DEMO.md</span>.
         </motion.p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
@@ -107,7 +111,7 @@ export function DemoPage() {
         </div>
 
         <aside className="glass-card h-fit p-5">
-          <p className="text-xs font-semibold tracking-[.18em] text-brand-amber">API KEYS</p>
+          <p className="text-xs font-semibold tracking-[.18em] text-brand-amber">API KEYS / ENV</p>
           <ul className="mt-4 space-y-3 text-sm">
             {KEYS.map((row) => (
               <li key={row.key}>
@@ -118,7 +122,9 @@ export function DemoPage() {
           </ul>
           <p className="mt-5 text-xs text-muted-foreground">
             Copy <code className="text-foreground">backend/.env.example</code> →{" "}
-            <code className="text-foreground">.env</code>
+            <code className="text-foreground">.env</code> ·{" "}
+            <code className="text-foreground">frontend/.env.example</code> →{" "}
+            <code className="text-foreground">.env.local</code>
           </p>
           <div className="mt-6 rounded-xl border border-border bg-background/50 p-3 font-mono text-[11px] leading-5 text-muted-foreground">
             Actually, only vegetarian… → REFINE
@@ -131,6 +137,10 @@ export function DemoPage() {
             <br />
             Forget it → CANCEL
           </div>
+          <p className="mt-4 text-[11px] leading-5 text-muted-foreground">
+            One backend + one Vite. If judge panel says Waiting for WebSocket,{" "}
+            <code className="text-foreground">VITE_API_URL</code> does not match the BE port.
+          </p>
         </aside>
       </section>
     </main>

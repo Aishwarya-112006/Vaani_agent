@@ -681,12 +681,17 @@ export function VoiceAgent() {
         if (draft) {
           if (pendingAsk === "city") {
             const cityHit = CITY_CHIPS.find((c) => text.toLowerCase().includes(c.toLowerCase()));
-            const name =
-              cityHit ||
-              text
-                .replace(/^(in|near|at)\s+/i, "")
-                .trim()
-                .split(/[\s,]/)[0];
+            // Never invent a city from interrupt noise ("Actually", "metro", …)
+            const name = cityHit;
+            if (!name) {
+              addAssistant(
+                replyLangRef.current === "hi"
+                  ? "Kaunsa city? Delhi, Mumbai, Bangalore…"
+                  : "Which city? Pick Delhi, Mumbai, Bangalore…",
+              );
+              setPipeline("idle");
+              return;
+            }
             if (name && name.length > 1) {
               preferredCityRef.current = name;
               cityConfirmedRef.current = true;
@@ -820,8 +825,19 @@ export function VoiceAgent() {
       const mergePrev = status === "RUNNING" || status === "COMPLETE" ? task : null;
       const next = parseTask(text, mergePrev, preferredCityRef.current);
       const kind = type || (status === "RUNNING" ? "REFINE" : null);
+      const knownCities = [
+        "Delhi",
+        "Mumbai",
+        "Bangalore",
+        "Hyderabad",
+        "Chennai",
+        "Pune",
+        "Kolkata",
+        "Goa",
+        "Jaipur",
+      ];
       const cityFromParams = next.params.match(/city=([^ ·]+)/)?.[1];
-      if (cityFromParams) {
+      if (cityFromParams && knownCities.some((c) => c.toLowerCase() === cityFromParams.toLowerCase())) {
         preferredCityRef.current = cityFromParams;
         cityConfirmedRef.current = true;
         setPreferredCity(cityFromParams);
@@ -852,7 +868,7 @@ export function VoiceAgent() {
       }
 
       if (session && session !== "pending") {
-        void sendTextMessage(session, text, type)
+        void sendTextMessage(session, text, kind || type)
           .then((res) => {
             if (res.reply_lang) setLang(asReplyLang(res.reply_lang));
             if (res.need_city) {
@@ -1003,7 +1019,9 @@ export function VoiceAgent() {
       }
       if (!cancelled) {
         setSession("pending");
-        setBannerError("Backend session nahi bani — backend :8000 check karo.");
+        setBannerError(
+          `Backend session nahi bani — ${import.meta.env["VITE_API_URL"] ?? "http://localhost:8000"} check karo (CORS + backend running?).`,
+        );
         setPipeline("error", "Session create failed");
       }
     };
@@ -1025,7 +1043,7 @@ export function VoiceAgent() {
 
   return (
     <main
-      className="relative mx-auto min-h-screen max-w-[1440px] px-4 pb-20 sm:px-8 lg:px-12"
+      className="relative mx-auto flex min-h-screen max-w-[1440px] flex-col px-4 pb-16 sm:px-6 lg:px-10"
       onPointerDownCapture={() => {
         void unlockAudio();
       }}
@@ -1036,55 +1054,34 @@ export function VoiceAgent() {
       <Backdrop />
       <SiteHeader tagline="interruptible intelligence" />
 
-      <section className="relative z-10 mx-auto max-w-5xl py-16 text-center sm:py-24">
-        <motion.p
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
-          className="mb-5 text-xs font-semibold tracking-[.28em] text-brand-cyan"
-        >
-          DATAFORGE 2026 · INDIA-FIRST VOICE AI
-        </motion.p>
-        <motion.h1
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.6, ease: "easeOut" }}
-          className="text-balance text-5xl font-semibold tracking-[-.065em] sm:text-7xl lg:text-8xl"
-        >
-          A voice agent that stays <span className="gradient-text">correct</span> when you change
-          your mind.
-        </motion.h1>
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.25, duration: 0.6 }}
-          className="mx-auto mt-7 max-w-2xl text-pretty text-base leading-7 text-muted-foreground sm:text-lg"
-        >
-          The first voice booking agent designed for the sentence that usually breaks automation:
-          “Actually, wait…”
-        </motion.p>
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, duration: 0.5 }}
-          className="mt-8 flex flex-wrap justify-center gap-2 text-xs"
-        >
-          {interruptCards.map((card) => (
-            <span
-              key={card.type}
-              className={`rounded-full border px-3 py-1.5 ${accentStyles[card.accent].chip}`}
-            >
-              {card.type}
-            </span>
-          ))}
-        </motion.div>
+      <section className="relative z-10 shrink-0 py-3 sm:py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0 max-w-xl">
+            <p className="text-[10px] font-semibold tracking-[.28em] text-brand-cyan">
+              DATAFORGE 2026 · VOICE LAB
+            </p>
+            <h1 className="mt-1 text-balance text-2xl font-semibold tracking-[-.05em] sm:text-3xl">
+              Stays <span className="gradient-text">correct</span> when you say “Actually, wait…”
+            </h1>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {interruptCards.map((card) => (
+              <span
+                key={card.type}
+                className={`rounded-full border px-2.5 py-1 text-[10px] ${accentStyles[card.accent].chip}`}
+              >
+                {card.type}
+              </span>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section
-        className={`relative z-10 grid gap-6 transition-all duration-500 ${
+        className={`relative z-10 grid min-h-0 flex-1 gap-4 transition-all duration-500 lg:h-[calc(100dvh-9.5rem)] lg:max-h-[calc(100dvh-9.5rem)] lg:shrink-0 ${
           showMapPanel
-            ? "lg:grid-cols-[minmax(17rem,1.1fr)_minmax(0,0.9fr)_20rem]"
-            : "lg:grid-cols-[minmax(0,1fr)_22rem]"
+            ? "lg:grid-cols-[minmax(14rem,0.9fr)_minmax(0,1.2fr)_17rem]"
+            : "lg:grid-cols-[minmax(0,1fr)_17rem]"
         }`}
       >
         <AnimatePresence initial={false}>
@@ -1101,25 +1098,28 @@ export function VoiceAgent() {
         <motion.div
           layout
           transition={{ type: "spring", stiffness: 280, damping: 28 }}
-          className={`glass-card p-5 sm:p-7 ${showMapPanel ? "lg:max-w-none" : ""}`}
+          className={`glass-card flex min-h-[28rem] flex-col overflow-hidden p-3 sm:p-4 lg:h-full lg:min-h-0 ${showMapPanel ? "lg:max-w-none" : ""}`}
         >
-          <div className="mb-6 flex items-center justify-between gap-4">
-            <div>
+          <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
+            <div className="min-w-0">
               <div className="flex items-center gap-2 text-sm font-semibold">
-                <Radio className="size-4 text-brand-cyan" />
+                <Radio className="size-3.5 shrink-0 text-brand-cyan" />
                 Live conversation
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Click mic to talk · click again to send
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                Mic to talk · click again to send · type anytime
               </p>
             </div>
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
               session_{mounted ? session : "pending"}
             </span>
           </div>
 
           <Transcript
             turns={turns}
+            className="min-h-0 max-h-none flex-1"
+            emptyTitle="Start talking or type below"
+            emptySubtitle="Interrupts stay on-screen — no scroll hunt."
             isBusy={
               recording ||
               sendingAudio ||
@@ -1142,7 +1142,7 @@ export function VoiceAgent() {
           {sttDegraded ? (
             <div
               role="status"
-              className="mt-3 rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs text-foreground"
+              className="mt-2 shrink-0 rounded-lg border border-amber-500/35 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-foreground"
             >
               Mic STT unavailable — <span className="font-semibold">type below</span> to continue
               the demo. Rime TTS still works.
@@ -1152,136 +1152,177 @@ export function VoiceAgent() {
           {bannerError ? (
             <div
               role="alert"
-              className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-brand-rose"
+              className="mt-2 shrink-0 rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-[11px] text-brand-rose"
             >
               {bannerError}
             </div>
           ) : null}
 
-          {cityPrompt.open ? (
-            <div className="mt-3 rounded-xl border border-primary/25 bg-primary/5 px-3 py-3 text-left">
-              <p className="text-sm font-medium">{cityPrompt.greeting}</p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Near <span className="font-semibold text-foreground">{preferredCity}</span>
-                {cityPrompt.isLocal ? " · localhost/VPN may be wrong — change freely" : ""}
-              </p>
-              {!cityPrompt.changing ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
-                    onClick={() => {
-                      void unlockAudio();
-                      applyCity(preferredCity);
-                    }}
-                  >
-                    Yes
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-lg border border-border bg-background/70 px-3 py-1.5 text-xs font-medium"
-                    onClick={() => {
-                      void unlockAudio();
-                      setCityPrompt((p) => ({ ...p, changing: true }));
-                    }}
-                  >
-                    Change city
-                  </button>
-                </div>
-              ) : (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {CITY_CHIPS.map((city) => (
+          <div className="mt-2 max-h-[34%] shrink-0 space-y-2 overflow-y-auto border-t border-border pt-2">
+            {cityPrompt.open ? (
+              <div className="rounded-lg border border-primary/25 bg-primary/5 px-2.5 py-2 text-left">
+                <p className="text-xs font-medium">{cityPrompt.greeting}</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  Near <span className="font-semibold text-foreground">{preferredCity}</span>
+                  {cityPrompt.isLocal ? " · localhost/VPN may be wrong — change freely" : ""}
+                </p>
+                {!cityPrompt.changing ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
                     <button
-                      key={city}
                       type="button"
-                      className={`rounded-lg border px-2.5 py-1 text-xs ${
-                        city === preferredCity
-                          ? "border-primary/40 bg-primary/15 font-semibold"
-                          : "border-border bg-background/70"
-                      }`}
+                      className="rounded-md bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground"
                       onClick={() => {
                         void unlockAudio();
-                        applyCity(city);
+                        applyCity(preferredCity);
                       }}
                     >
-                      {city}
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md border border-border bg-background/70 px-2.5 py-1 text-[11px] font-medium"
+                      onClick={() => {
+                        void unlockAudio();
+                        setCityPrompt((p) => ({ ...p, changing: true }));
+                      }}
+                    >
+                      Change city
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {CITY_CHIPS.map((city) => (
+                      <button
+                        key={city}
+                        type="button"
+                        className={`rounded-md border px-2 py-0.5 text-[11px] ${
+                          city === preferredCity
+                            ? "border-primary/40 bg-primary/15 font-semibold"
+                            : "border-border bg-background/70"
+                        }`}
+                        onClick={() => {
+                          void unlockAudio();
+                          applyCity(city);
+                        }}
+                      >
+                        {city}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-center text-[10px] text-muted-foreground">
+                Near <span className="font-medium text-foreground">{preferredCity}</span>
+                {" · "}
+                <button
+                  type="button"
+                  className="underline-offset-2 hover:underline"
+                  onClick={() => {
+                    void unlockAudio();
+                    setCityPrompt({
+                      open: true,
+                      changing: true,
+                      greeting: greetCity(preferredCity, replyLang),
+                      isLocal: false,
+                    });
+                  }}
+                >
+                  change city
+                </button>
+              </p>
+            )}
+
+            {task ? (
+              <div>
+                <p className="mb-1 text-center text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  Active filters · tap to remove
+                </p>
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  {paramsToChips(task.params, replyLang).map((chip) => (
+                    <button
+                      key={`${chip.paramKey}=${chip.value}`}
+                      type="button"
+                      title={`Remove ${chip.key}`}
+                      onClick={() => removeConstraint(chip.paramKey, chip.label)}
+                      className="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-brand-violet transition hover:border-destructive/40 hover:bg-destructive/10 hover:text-brand-rose"
+                    >
+                      <span className="opacity-60">{chip.key}</span>
+                      <span>{chip.label}</span>
+                      <span aria-hidden className="text-[10px] opacity-70">
+                        ×
+                      </span>
                     </button>
                   ))}
                 </div>
-              )}
-            </div>
-          ) : (
-            <p className="mt-3 text-center text-[11px] text-muted-foreground">
-              Searching near <span className="font-medium text-foreground">{preferredCity}</span>
-              {" · "}
-              <button
-                type="button"
-                className="underline-offset-2 hover:underline"
-                onClick={() => {
-                  void unlockAudio();
-                  setCityPrompt({
-                    open: true,
-                    changing: true,
-                    greeting: greetCity(preferredCity, replyLang),
-                    isLocal: false,
-                  });
-                }}
-              >
-                change city
-              </button>
-            </p>
-          )}
-
-          {task ? (
-            <div className="mt-3">
-              <p className="mb-1.5 text-center text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                Active filters · tap to remove
-              </p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {paramsToChips(task.params, replyLang).map((chip) => (
-                  <button
-                    key={`${chip.paramKey}=${chip.value}`}
-                    type="button"
-                    title={`Remove ${chip.key}`}
-                    onClick={() => removeConstraint(chip.paramKey, chip.label)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-medium text-brand-violet transition hover:border-destructive/40 hover:bg-destructive/10 hover:text-brand-rose"
-                  >
-                    <span className="opacity-60">{chip.key}</span>
-                    <span>{chip.label}</span>
-                    <span aria-hidden className="text-[10px] opacity-70">
-                      ×
-                    </span>
-                  </button>
-                ))}
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          {status === "COMPLETE" && task ? (
-            <div className="mt-3">
-              <p className="mb-1.5 text-center text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                Next · one tap
+            <div>
+              <p className="mb-1 text-center text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                {status === "RUNNING"
+                  ? "Interrupt now · while searching"
+                  : "Interrupts · start a search, then tap one"}
               </p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {FOLLOW_UP_CHIPS.map((chip) => (
+              <div className="flex flex-wrap justify-center gap-1.5">
+                {[
+                  { label: "REFINE", utterance: "Actually, near metro" },
+                  { label: "STATUS", utterance: "What are you searching for?" },
+                  { label: "FACT", utterance: "What is Connaught Place?" },
+                  { label: "PIVOT", utterance: "Find restaurants instead" },
+                  { label: "CANCEL", utterance: "Forget it" },
+                ].map((chip) => (
                   <button
-                    key={chip.id}
+                    key={chip.label}
                     type="button"
                     onClick={() => {
                       void unlockAudio();
                       stopSpeaking();
+                      if (status !== "RUNNING" && chip.label !== "FACT" && chip.label !== "CANCEL") {
+                        submit("Find hotels in Delhi under 5000");
+                        window.setTimeout(() => submit(chip.utterance), 900);
+                        return;
+                      }
                       submit(chip.utterance);
                     }}
-                    className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-brand-cyan transition hover:border-accent/50 hover:bg-accent/20"
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                      status === "RUNNING"
+                        ? "border-brand-amber/50 bg-brand-amber/15 text-brand-amber hover:bg-brand-amber/25"
+                        : "border-border bg-card/60 text-muted-foreground hover:border-brand-amber/40 hover:text-brand-amber"
+                    }`}
                   >
                     {chip.label}
                   </button>
                 ))}
               </div>
             </div>
-          ) : null}
 
-          <div className="mt-6 flex flex-col items-center border-t border-border pt-6">
+            {status === "COMPLETE" && task ? (
+              <div>
+                <p className="mb-1 text-center text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  Next · one tap
+                </p>
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  {FOLLOW_UP_CHIPS.map((chip) => (
+                    <button
+                      key={chip.id}
+                      type="button"
+                      onClick={() => {
+                        void unlockAudio();
+                        stopSpeaking();
+                        submit(chip.utterance);
+                      }}
+                      className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[11px] font-semibold text-brand-cyan transition hover:border-accent/50 hover:bg-accent/20"
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-2 flex shrink-0 flex-col items-center border-t border-border pt-2">
             <PushToTalk
               sessionId={session}
               disabled={!mounted || session === "pending"}
@@ -1441,7 +1482,7 @@ export function VoiceAgent() {
               }}
             />
 
-            <div className="mt-5 flex w-full gap-2">
+            <div className="mt-2 flex w-full gap-2">
               <input
                 ref={inputRef}
                 value={input}
@@ -1458,7 +1499,7 @@ export function VoiceAgent() {
                   }
                 }}
                 placeholder="Type an interruption… Hinglish chalega"
-                className="min-w-0 flex-1 rounded-xl border border-border bg-background/60 px-4 py-3 text-sm outline-none transition placeholder:text-muted-foreground focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
+                className="min-w-0 flex-1 rounded-lg border border-border bg-background/60 px-3 py-2 text-sm outline-none transition placeholder:text-muted-foreground focus:border-accent/50 focus:ring-2 focus:ring-accent/20"
               />
               <motion.button
                 type="button"
@@ -1474,7 +1515,7 @@ export function VoiceAgent() {
                   submit(input);
                 }}
                 aria-label="Send"
-                className="grid place-items-center rounded-xl bg-accent px-4 text-sm font-semibold text-accent-foreground transition hover:brightness-110"
+                className="grid place-items-center rounded-lg bg-accent px-3 text-sm font-semibold text-accent-foreground transition hover:brightness-110"
               >
                 <ArrowUpRight className="size-4" />
               </motion.button>
@@ -1482,14 +1523,14 @@ export function VoiceAgent() {
           </div>
         </motion.div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex min-h-0 flex-col gap-3 lg:h-full lg:overflow-y-auto">
           <DebugPanel state={wsState} connected={wsConnected} latency={latency} />
 
-          <aside className="glass-card p-5">
-            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
+          <aside className="glass-card shrink-0 p-3">
+            <div className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-foreground">
               <Zap className="size-3 text-brand-amber" /> event stream
             </div>
-            <div className="rounded-xl border border-border bg-background/50 p-3 font-mono text-[11px] leading-5 text-muted-foreground">
+            <div className="max-h-36 overflow-y-auto rounded-lg border border-border bg-background/50 p-2 font-mono text-[10px] leading-4 text-muted-foreground lg:max-h-none">
               <AnimatePresence initial={false}>
                 {logs.length ? (
                   logs.slice(0, 7).map((log) => (
@@ -1513,7 +1554,7 @@ export function VoiceAgent() {
         </div>
       </section>
 
-      <section className="relative z-10 py-20">
+      <section className="relative z-10 py-12 sm:py-16">
         <SectionTitle
           eyebrow="INTERRUPTION INTELLIGENCE"
           title="Every “wait” has a different meaning."

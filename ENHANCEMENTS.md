@@ -74,7 +74,18 @@ Use this as the single checklist before demo day — and to **split GitHub issue
 
 ### D3. Voice UX reliability — **DONE** · Owner: Frontend (+ Backend summaries/delay)
 - [x] **Frontend:** click-to-toggle mic, session guard, Rime-only speak, EN/HI copy
-- [x] **Backend:** shorter summaries, ~2–2.8s delay, stale-fence test retune
+- [x] **Backend:** shorter summaries, ~4–5s cancelable delay (interrupt demo window), stale-fence retune
+
+### D4. Viewport lab + live map panel — **DONE** · Owner: Frontend
+- [x] Conversation card fits viewport; transcript scrolls inside
+- [x] Left `PlacesPanel` (map + place list) while RUNNING/COMPLETE
+- [x] Always-on interrupt chips (REFINE/STATUS/FACT/PIVOT/CANCEL)
+- [x] City-ask rejects interrupt noise (`Actually` / `metro`)
+
+### D5. Docs + env align — **DONE** · Owner: Docs
+- [x] README / DEMO.md / RIME_EVIDENCE.md / `/demo` page refreshed
+- [x] `backend/.env.example` + `frontend/.env.example` (CORS 8080–8082, PORT note, live no-fallback)
+- [x] Chromium smoke: `frontend/scripts/chromium-smoke.mjs`
 
 ---
 
@@ -89,15 +100,15 @@ Use this as the single checklist before demo day — and to **split GitHub issue
 ### A4. Real hotel/places search — **DONE (opt-in)** · Owner: **Backend** + **Frontend**
 **Backend**
 - [x] Geoapify/OSM Places via `tools/real_places.py`; adapter in hotel/restaurant tools
-- [x] Mock fallback when `USE_LIVE_PLACES=0` / API miss; cancelable live delay
-- [x] Honest `budget_note` when live prices unavailable
+- [x] Mock when `USE_LIVE_PLACES=0`; **no mock fallback while live is on** (honest empty/error)
+- [x] Cancelable ~4–5s delay; honest `budget_note` when live prices unavailable
 **Frontend**
-- [x] Embedded Leaflet map on `/` after COMPLETE (`ResultsMap` + `lat`/`lon`)
+- [x] Left `PlacesPanel` + Leaflet map (`ResultsMap`) on search/results
 - [x] DebugPanel `places_source`; late WS map refresh
 
 **Enable:** `GEOAPIFY_API_KEY` + `USE_LIVE_PLACES=1` in `backend/.env`  
 **Files BE:** `tools/real_places.py`, `hotel_search.py`, `restaurant_search.py`, `main.py`  
-**Files FE:** `ResultsMap.tsx`, `voice-agent.tsx`, `copy.ts`, `DebugPanel.tsx`
+**Files FE:** `PlacesPanel.tsx`, `ResultsMap.tsx`, `voice-agent.tsx`, `DebugPanel.tsx`
 
 ---
 
@@ -317,7 +328,7 @@ UI / Rime playback
 3. ~~Both/Backend: B3 compare + E1 FACT tests~~ **DONE** (FACT tests added)
 4. ~~Frontend: B2 follow-ups · Both: B4 ambiguity~~ **DONE**
 5. ~~Docs: F 60s script~~ **DONE** (`DEMO.md` + `/demo`)
-6. **Later / optional:** B8 undo · B9 latency · A4 real places · H1 split `voice-agent.tsx`
+6. **Later / optional:** B8 undo · H1 split `voice-agent.tsx` · screen recording
 
 ---
 
@@ -326,7 +337,7 @@ UI / Rime playback
 | ID | Pri | Owner | Status |
 |----|-----|-------|--------|
 | B8 | P2 | Both | Undo last interrupt — **leave** (nice-to-have) |
-| A4 / A3 | P2 | Backend | Real OSM places — **DONE** (Geoapify + map; mock fallback; `USE_LIVE_PLACES=1`) |
+| A4 / A3 | P2 | Backend | Real OSM places — **DONE** (Geoapify + map; **no mock while live on**; `USE_LIVE_PLACES=1`) |
 | H1 | P1 | Frontend | Split `voice-agent.tsx` — **leave** (refactor only) |
 | H3 / H4 | P2 | Frontend | Dep trim / copy audit — **leave** |
 | D2–D4 | P2 | Backend/Docs | Docker / Rime-down — **leave** |

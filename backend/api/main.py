@@ -277,19 +277,24 @@ def _resolve_tool_kind(
 def _classify_interrupt(text: str, state: ConversationState) -> Optional[str]:
     """Keep keyword families in sync with frontend `lib/interrupt.ts` (C1 / H2)."""
     s = (text or "").lower()
-    if re.search(r"what are you|are you still|how long|status", s):
+    if re.search(r"what are you|are you still|how long|\bstatus\b", s):
         return "STATUS"
     if re.search(r"what is|tell me about|who is|kya hai|kya hota|batao", s):
         return "FACT"
-    if re.search(r"forget it|never mind|stop searching|cancel|stop it", s):
+    if re.search(r"forget it|never mind|stop searching|\bcancel\b|stop it", s):
         return "CANCEL"
     task_type = str(state.current_task.get("type", ""))
     if task_type == "hotel" and _restaurant_signal(s):
         return "PIVOT"
     if task_type == "restaurant" and _hotel_signal(s):
         return "PIVOT"
-    if state.tool_status == "RUNNING" and re.search(
-        r"actually|only|vegetarian|veg|under|metro|near|rupees|₹|cuisine|area",
+    # REFINE while searching OR after a result (re-run with new filters)
+    has_task = task_type in ("hotel", "restaurant")
+    active = state.tool_status in ("RUNNING", "COMPLETE") and has_task
+    if active and re.search(
+        r"actually|only|vegetarian|\bveg\b|under|metro|near|rupees|₹|cuisine|area|"
+        r"same\s+(but|search)|shakahari|sirf\s+veg|"
+        r"\b(delhi|mumbai|bangalore|bengaluru|jaipur|hyderabad|chennai|pune|kolkata|goa)\b",
         s,
     ):
         return "REFINE"

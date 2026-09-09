@@ -45,11 +45,11 @@ export function DebugPanel({ state, connected, latency }: DebugPanelProps) {
       : "—";
 
   return (
-    <aside className="glass-card h-fit p-5">
-      <div className="mb-5 flex items-center justify-between">
+    <aside className="glass-card h-fit shrink-0 p-3">
+      <div className="mb-3 flex items-center justify-between">
         <div>
-          <p className="text-xs font-semibold tracking-[.2em] text-brand-cyan">JUDGE PANEL</p>
-          <h2 className="mt-1 font-semibold">Live debug</h2>
+          <p className="text-[10px] font-semibold tracking-[.2em] text-brand-cyan">JUDGE PANEL</p>
+          <h2 className="text-sm font-semibold">Live debug</h2>
         </div>
         <div className="flex items-center gap-2">
           {connected ? (
@@ -98,8 +98,8 @@ function Metric({ label, value, tone }: { label: string; value: string; tone: To
               : "text-muted-foreground";
 
   return (
-    <div className="rounded-xl border border-border bg-card/60 p-3">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+    <div className="rounded-lg border border-border bg-card/60 p-2">
+      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</p>
       <AnimatePresence mode="wait" initial={false}>
         <motion.p
           key={value}
@@ -107,7 +107,7 @@ function Metric({ label, value, tone }: { label: string; value: string; tone: To
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.2 }}
-          className={`mt-2 truncate font-mono text-sm font-semibold ${toneClass}`}
+          className={`mt-1 truncate font-mono text-xs font-semibold ${toneClass}`}
         >
           {value}
         </motion.p>

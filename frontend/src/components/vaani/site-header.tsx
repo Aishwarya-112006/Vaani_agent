@@ -3,12 +3,12 @@ import { motion } from "framer-motion";
 
 export function SiteHeader({ tagline }: { tagline: string }) {
   return (
-    <header className="relative z-10 flex flex-wrap items-center justify-between gap-4 border-b border-border py-5">
+    <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border py-3">
       <Link to="/" className="group flex items-center gap-3">
         <motion.div
           whileHover={{ rotate: 8, scale: 1.08 }}
           transition={{ type: "spring", stiffness: 320, damping: 16 }}
-          className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-xl font-black text-primary-foreground shadow-[0_0_35px_oklch(0.53_0.24_294/0.4)]"
+          className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-primary to-accent text-lg font-black text-primary-foreground shadow-[0_0_35px_oklch(0.53_0.24_294/0.4)]"
         >
           V
         </motion.div>
