@@ -226,15 +226,29 @@ export function resultFallbackFromTool(
       .slice(0, 2)
       .map((r) => {
         if (r && typeof r === "object" && "price_inr" in r) {
-          return `${(r as { name?: string }).name} ₹${(r as { price_inr?: number }).price_inr}`;
+          const price = (r as { price_inr?: unknown }).price_inr;
+          if (typeof price === "number") {
+            return `${(r as { name?: string }).name} ₹${price}`;
+          }
         }
         return "";
       })
       .filter(Boolean);
-    const contrast = prices.length >= 2 ? ` Compare: ${prices[0]} vs ${prices[1]}.` : "";
-    return lang === "hi"
-      ? `${city}, ${budget} ke under — ${names.length} hotels. ${names.join(", ")}.${contrast}`
-      : `${city}, under ${budget} — ${names.length} hotels. ${names.join(", ")}.${contrast}`;
+    const contrast =
+      prices.length >= 2
+        ? ` Compare: ${prices[0]} vs ${prices[1]}.`
+        : names.length >= 2
+          ? ` Compare: ${names[0]} vs ${names[1]}.`
+          : "";
+    const hasPrices = prices.length > 0;
+    if (lang === "hi") {
+      return hasPrices
+        ? `${city}, ${budget} ke under — ${names.length} hotels. ${names.join(", ")}.${contrast}`
+        : `${city} — ${names.length} hotels. ${names.join(", ")}.${contrast}`;
+    }
+    return hasPrices
+      ? `${city}, under ${budget} — ${names.length} hotels. ${names.join(", ")}.${contrast}`
+      : `${city} — ${names.length} hotels. ${names.join(", ")}.${contrast}`;
   }
   return resultHotels(city, budget, lang);
 }

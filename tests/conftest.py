@@ -10,6 +10,7 @@ either — it uses inline regex.
 """
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -17,6 +18,12 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 import httpx
+
+# Force mock inventory for deterministic interrupt/eval tests — must run
+# before importing api.main (dotenv via agent modules would otherwise pick
+# up a developer .env with USE_LIVE_PLACES=1).
+os.environ["USE_LIVE_PLACES"] = "0"
+os.environ["VAANI_LOCK_PLACES_ENV"] = "1"
 
 # The real backend expects to be run with `backend/` on sys.path (main.py
 # does `from agent.state import ...` as an absolute import, and

@@ -32,6 +32,7 @@ export function DebugPanel({ state, connected, latency }: DebugPanelProps) {
   const toolStatus = state?.tool_status ?? "—";
   const interrupt = state?.last_interrupt_type || "—";
   const stale = state ? String(state.stale_discarded) : "—";
+  const placesSource = state?.last_tool_result?.source || "—";
   const toolMs =
     typeof latency?.toolDelaySec === "number"
       ? `${Math.round(latency.toolDelaySec * 1000)} ms`
@@ -68,6 +69,7 @@ export function DebugPanel({ state, connected, latency }: DebugPanelProps) {
         <Metric label="tool_status" value={toolStatus} tone={toneForStatus(toolStatus)} />
         <Metric label="interrupt_type" value={interrupt} tone="cyan" />
         <Metric label="stale_discarded" value={stale} tone="amber" />
+        <Metric label="places_source" value={placesSource} tone="cyan" />
         <Metric label="tool_delay" value={toolMs} tone="lime" />
         <Metric label="ack→complete" value={ackGap} tone="muted" />
       </div>

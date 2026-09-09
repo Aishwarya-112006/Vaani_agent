@@ -3,8 +3,10 @@
 Interruptible **India-first** voice booking agent (hotels + restaurants).  
 Built for the Rime Track: users can change their mind mid-search without stale answers being spoken.
 
-> **Honest demo note:** hotel/restaurant **results are mock inventory** (names/prices).  
-> What is live: interrupt classification, turn fencing, Groq STT, Rime TTS, Wikipedia FACT, IP city greeting.
+> **Honest demo note:** hotel/restaurant results default to **mock inventory** (names/prices) so
+> interrupts stay demoable. Set `GEOAPIFY_API_KEY` + `USE_LIVE_PLACES=1` for live OpenStreetMap
+> places + map pins (budget is not hard-filtered on live data). Always falls back to mock on API miss.
+> What is live either way: interrupt classification, turn fencing, Groq STT, Rime TTS, Wikipedia FACT, IP city greeting.
 
 ---
 
@@ -69,9 +71,13 @@ Copy `backend/.env.example` → `backend/.env`:
 | `RIME_SPEAKER` / `RIME_MODEL_ID` | No | English voice (default Luna / Arcana) |
 | `RIME_SPEAKER_HI` / `RIME_MODEL_ID_HI` | No | Hindi voice (`nadi` / `coda`) |
 | `IPINFO_TOKEN` | No | City greeting (fallback: detected/local) |
+| `GEOAPIFY_API_KEY` | No | Live places geocode + search ([free key](https://myprojects.geoapify.com/)) |
+| `USE_LIVE_PLACES` | No (`0`) | Set `1` to use Geoapify; keep `0` for mock/eval |
 | `CORS_ORIGINS` | Prod | Comma-separated frontend origins |
 
 Frontend optional: `VITE_API_URL` (default `http://localhost:8000`).
+
+**Live places + map:** set `GEOAPIFY_API_KEY` and `USE_LIVE_PLACES=1`, restart **one** backend (`pnpm dev` in `/backend`). After a search completes on `/`, a **Map** card appears above the mic. Only one process should listen on `:8000` — leftover uvicorn reloaders will serve stale mock results.
 
 **If mic STT returns 403** (“Access denied / network settings”): Groq is blocking the key or network — use **typed text** for the demo; TTS can still work.
 
@@ -105,9 +111,9 @@ Frontend optional: `VITE_API_URL` (default `http://localhost:8000`).
 | API | FastAPI · WebSocket state · CORS |
 | STT | Groq Whisper (`whisper-large-v3`, `auto` language) |
 | TTS | Rime (`POST /tts`) — Rime-only playback (no browser voice bridge) |
-| Tools | Mock `search_hotels` / `search_restaurants` (~2.0–2.8s, cancelable) |
+| Tools | `search_hotels` / `search_restaurants` — mock by default (~2.0–2.8s, cancelable); optional live Geoapify/OSM when `USE_LIVE_PLACES=1` |
 | Aside | Wikipedia FACT |
-| Geo | IPInfo → session city (confirm before preferred city sticks) |
+| Geo | IPInfo → session city; Geoapify geocode + Places (optional); results map (Leaflet / OSM tiles) |
 | UI | TanStack Start / Vite · Framer Motion · Web Audio |
 
 ---
@@ -119,7 +125,7 @@ Vaani_agent/
 ├── backend/           # FastAPI app (pnpm setup / pnpm dev)
 │   ├── api/main.py
 │   ├── agent/         # STT, Rime, state, interrupts
-│   └── tools/         # hotels, restaurants, wikipedia, ipinfo
+│   └── tools/         # hotels, restaurants, real_places, wikipedia, ipinfo
 ├── frontend/          # Voice lab UI (:8080)
 │   └── src/components/vaani/
 ├── tests/             # pytest vs live ASGI app

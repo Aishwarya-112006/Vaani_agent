@@ -1,8 +1,8 @@
-"""Interruptible mock hotel search tool.
+"""Interruptible hotel search tool.
 
-`search_hotels` sleeps ~2–2.8 seconds (cancellable via asyncio task cancel),
-then returns structured mock results. Cancellation raises CancelledError
-so callers can treat the delay as interruptible.
+Default: mock inventory with ~2–2.8s cancelable delay (demo/eval).
+Optional: Geoapify live Places when USE_LIVE_PLACES=1 and GEOAPIFY_API_KEY
+are set — same return shape, mock fallback on miss/error.
 """
 
 from __future__ import annotations
@@ -18,6 +18,11 @@ from tools.mock_inventory import (
     default_area_for_city,
     hotels_for_city,
     normalize_city_key,
+)
+from tools.real_places import (
+    enrich_with_coords,
+    live_hotels,
+    live_places_enabled,
 )
 
 logger = logging.getLogger(__name__)
@@ -94,14 +99,24 @@ def parse_hotel_params(
     }
 
 
+def _hotel_pick_label(h: dict) -> str:
+    area = h.get("area") or ""
+    price = h.get("price_inr")
+    base = f"{h['name']} ({area})" if area else str(h["name"])
+    if price is not None:
+        return f"{base} ₹{price}"
+    return base
+
+
 def _contrast_hotels(top: list[dict], *, lang: str = "en") -> str:
     """One short compare line when at least two hotels are returned."""
     if len(top) < 2:
         return ""
     a, b = top[0], top[1]
-    if lang == "hi":
-        return f" Compare: {a['name']} ₹{a['price_inr']} vs {b['name']} ₹{b['price_inr']}."
-    return f" Compare: {a['name']} ₹{a['price_inr']} vs {b['name']} ₹{b['price_inr']}."
+    a_price, b_price = a.get("price_inr"), b.get("price_inr")
+    if a_price is not None and b_price is not None:
+        return f" Compare: {a['name']} ₹{a_price} vs {b['name']} ₹{b_price}."
+    return f" Compare: {a['name']} vs {b['name']}."
 
 
 def _format_hotel_summary(
@@ -112,55 +127,70 @@ def _format_hotel_summary(
     veg_only: bool,
     *,
     lang: str = "en",
+    budget_filtered: bool = True,
 ) -> str:
     """Short spoken summary (keeps Rime TTS snappy). Budget is INR, not meters."""
-    picks = ", ".join(f"{h['name']} ({h['area']}) ₹{h['price_inr']}" for h in top)
+    picks = ", ".join(_hotel_pick_label(h) for h in top)
     metro = " near metro" if near_metro else ""
     veg = ", veg" if veg_only else ""
     contrast = _contrast_hotels(top, lang=lang)
 
-    if lang == "hi":
+    if budget_filtered:
+        if lang == "hi":
+            return (
+                f"{city_name}, {cap} ke under{metro}{veg} — {len(top)} hotels. "
+                f"{picks}.{contrast}"
+            )
         return (
-            f"{city_name}, {cap} ke under{metro}{veg} — {len(top)} hotels. "
+            f"{city_name}, under {cap}{metro}{veg} — {len(top)} hotels. "
             f"{picks}.{contrast}"
         )
-    return (
-        f"{city_name}, under {cap}{metro}{veg} — {len(top)} hotels. "
-        f"{picks}.{contrast}"
-    )
+
+    if lang == "hi":
+        return f"{city_name}{metro}{veg} — {len(top)} hotels. {picks}.{contrast}"
+    return f"{city_name}{metro}{veg} — {len(top)} hotels. {picks}.{contrast}"
 
 
-async def search_hotels(
-    city: str,
-    budget: int | float | None = 5000,
-    near_metro: bool = False,
-    veg_only: bool = False,
+def _rows_from_live_hotels(
+    places: list[dict[str, Any]],
     *,
-    delay: float | None = None,
-    reply_lang: str = "en",
+    city_name: str,
+    veg_only: bool,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for p in places:
+        area = (p.get("area") or "").strip() or city_name
+        rows.append(
+            {
+                "name": p.get("name") or "Hotel",
+                "city": p.get("city") or city_name,
+                "area": area,
+                "price_inr": None,
+                "rating": None,
+                "near_metro": bool(p.get("near_metro", False)),
+                "veg_friendly": veg_only,
+                "amenities": [],
+                "lat": p.get("lat"),
+                "lon": p.get("lon"),
+                "distance_m": p.get("distance_m"),
+                "address": p.get("address") or "",
+                "metro_distance_m": p.get("metro_distance_m"),
+                "metro_name": p.get("metro_name"),
+            }
+        )
+    return rows[:3]
+
+
+async def _mock_search_hotels(
+    city_key: str,
+    city_name: str,
+    cap: int,
+    near_metro: bool,
+    veg_only: bool,
+    *,
+    wait: float,
+    reply_lang: str,
 ) -> dict[str, Any]:
-    """Search mock hotels after an interruptible artificial delay.
-
-    Raises:
-        asyncio.CancelledError: if the surrounding task is cancelled mid-delay
-            (REFINE / CANCEL / PIVOT interrupt).
-    """
-    city_key = normalize_city_key(city)
-    city_name = city_key
-    cap = int(budget) if budget is not None else 5000
-    wait = delay if delay is not None else random.uniform(MIN_DELAY, MAX_DELAY)
-
-    logger.info(
-        "search_hotels start city=%s budget=%s near_metro=%s veg_only=%s delay=%.2fs lang=%s",
-        city_name,
-        cap,
-        near_metro,
-        veg_only,
-        wait,
-        reply_lang,
-    )
-
-    # Interruptible delay — task.cancel() wakes this with CancelledError
     await asyncio.sleep(wait)
 
     results = []
@@ -183,13 +213,11 @@ async def search_hotels(
             }
         )
 
-    # Prefer metro matches when requested; hard-drop only if we still have enough hits
     if near_metro:
         metro_hits = [h for h in results if h["_metro_match"]]
         if len(metro_hits) >= 2:
             results = metro_hits
 
-    # Always return something useful for the demo
     if not results:
         results = [
             {
@@ -213,6 +241,7 @@ async def search_hotels(
         )
     )
     top = [{k: v for k, v in h.items() if not k.startswith("_")} for h in results[:3]]
+    top = await enrich_with_coords(top, city=city_name)
 
     payload = {
         "tool": "search_hotels",
@@ -229,7 +258,142 @@ async def search_hotels(
         ),
         "reply_lang": reply_lang,
         "delay_seconds": round(wait, 2),
+        "source": "mock",
     }
-
-    logger.info("search_hotels complete count=%s top=%s", len(top), top[0]["name"])
+    logger.info("search_hotels complete source=mock count=%s top=%s", len(top), top[0]["name"])
     return payload
+
+
+async def search_hotels(
+    city: str,
+    budget: int | float | None = 5000,
+    near_metro: bool = False,
+    veg_only: bool = False,
+    *,
+    delay: float | None = None,
+    reply_lang: str = "en",
+) -> dict[str, Any]:
+    """Search hotels (live Geoapify when enabled, else mock).
+
+    Raises:
+        asyncio.CancelledError: if the surrounding task is cancelled mid-await
+            (REFINE / CANCEL / PIVOT interrupt).
+    """
+    city_key = normalize_city_key(city)
+    city_name = city_key
+    cap = int(budget) if budget is not None else 5000
+    wait = delay if delay is not None else random.uniform(MIN_DELAY, MAX_DELAY)
+
+    logger.info(
+        "search_hotels start city=%s budget=%s near_metro=%s veg_only=%s live=%s lang=%s",
+        city_name,
+        cap,
+        near_metro,
+        veg_only,
+        live_places_enabled(),
+        reply_lang,
+    )
+
+    if live_places_enabled():
+        try:
+            # Cancelable pause so REFINE/CANCEL still have a demo window under live.
+            live_wait = delay if delay is not None else random.uniform(1.6, 2.2)
+            await asyncio.sleep(live_wait)
+            places = await live_hotels(city_name, near_metro=near_metro, limit=15)
+            if places:
+                top = _rows_from_live_hotels(places, city_name=city_name, veg_only=veg_only)
+                notes = [
+                    "Live OSM listings rarely include prices — showing nearby matches "
+                    "without filtering by budget."
+                ]
+                if veg_only:
+                    notes.append(
+                        "Vegetarian preference is noted in the summary; OSM hotels "
+                        "aren't hard-filtered for veg-friendly."
+                    )
+                budget_note = " ".join(notes)
+                payload = {
+                    "tool": "search_hotels",
+                    "params": {
+                        "city": city_name,
+                        "budget": cap,
+                        "near_metro": near_metro,
+                        "veg_only": veg_only,
+                    },
+                    "count": len(top),
+                    "results": top,
+                    "summary": _format_hotel_summary(
+                        top,
+                        city_name,
+                        cap,
+                        near_metro,
+                        veg_only,
+                        lang=reply_lang,
+                        budget_filtered=False,
+                    ),
+                    "reply_lang": reply_lang,
+                    "delay_seconds": round(live_wait, 2),
+                    "source": "geoapify+osm",
+                    "budget_filtered": False,
+                    "budget_note": budget_note,
+                }
+                logger.info(
+                    "search_hotels complete source=live count=%s top=%s",
+                    len(top),
+                    top[0]["name"],
+                )
+                return payload
+            logger.info("search_hotels live empty for city=%s — no mock while live mode on", city_name)
+            empty = {
+                "tool": "search_hotels",
+                "params": {
+                    "city": city_name,
+                    "budget": cap,
+                    "near_metro": near_metro,
+                    "veg_only": veg_only,
+                },
+                "count": 0,
+                "results": [],
+                "summary": (
+                    f"No live hotel matches found near {city_name}"
+                    + (" / metro" if near_metro else "")
+                    + ". Try another area."
+                ),
+                "reply_lang": reply_lang,
+                "delay_seconds": round(live_wait, 2),
+                "source": "geoapify+osm",
+                "budget_filtered": False,
+                "budget_note": "Live OSM search returned no matches — mock inventory is disabled while USE_LIVE_PLACES=1.",
+            }
+            return empty
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — still avoid inventing mock names in live mode
+            logger.warning("search_hotels live failed (no mock): %s", exc)
+            return {
+                "tool": "search_hotels",
+                "params": {
+                    "city": city_name,
+                    "budget": cap,
+                    "near_metro": near_metro,
+                    "veg_only": veg_only,
+                },
+                "count": 0,
+                "results": [],
+                "summary": f"Live hotel search failed for {city_name}. Check Geoapify key / network.",
+                "reply_lang": reply_lang,
+                "delay_seconds": None,
+                "source": "geoapify+osm",
+                "budget_note": str(exc)[:160],
+            }
+
+    return await _mock_search_hotels(
+        city_key,
+        city_name,
+        cap,
+        near_metro,
+        veg_only,
+        wait=wait,
+        reply_lang=reply_lang,
+    )
+

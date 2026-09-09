@@ -40,6 +40,7 @@ import { useWebSocket, type ToolResult } from "@/hooks/useWebSocket";
 
 import { Backdrop } from "./backdrop";
 import { DebugPanel } from "./DebugPanel";
+import { PlacesPanel } from "./PlacesPanel";
 import { PushToTalk } from "./PushToTalk";
 import { SiteHeader } from "./site-header";
 import { Transcript, type Turn } from "./Transcript";
@@ -195,7 +196,8 @@ function removeParamKey(params: string, paramKey: string, fallbackCity: string):
 function parseTask(text: string, previous?: Task | null, defaultCity = "Delhi"): Task {
   const s = text.toLowerCase();
   const type = resolveTaskType(text, previous);
-  const city = [
+  // Last city mentioned wins (e.g. "Bangalore wait Jaipur" → Jaipur)
+  const cityList = [
     "Delhi",
     "Mumbai",
     "Bangalore",
@@ -205,7 +207,16 @@ function parseTask(text: string, previous?: Task | null, defaultCity = "Delhi"):
     "Kolkata",
     "Goa",
     "Jaipur",
-  ].find((x) => s.includes(x.toLowerCase()));
+  ];
+  let city: string | undefined;
+  let lastCityIdx = -1;
+  for (const name of cityList) {
+    const idx = s.lastIndexOf(name.toLowerCase());
+    if (idx > lastCityIdx) {
+      lastCityIdx = idx;
+      city = name;
+    }
+  }
   const area = [
     "Connaught Place",
     "Indiranagar",
@@ -322,6 +333,7 @@ export function VoiceAgent() {
   const spokenRequestRef = useRef<string | null>(null);
   const taskRef = useRef<Task | null>(null);
   const lastResultRef = useRef<ToolResult | null>(null);
+  const [lastResult, setLastResult] = useState<ToolResult | null>(null);
   const replyLangRef = useRef<ReplyLang>("en");
   const preferredCityRef = useRef("");
   const pendingDraftRef = useRef<{
@@ -489,6 +501,31 @@ export function VoiceAgent() {
 
   const completeFromBackend = useCallback(
     (requestId: string, result: ToolResult, source: "ws" | "fallback") => {
+      const hasCoords =
+        Array.isArray(result.results) &&
+        result.results.some(
+          (row) =>
+            row &&
+            typeof row === "object" &&
+            Number.isFinite(Number((row as { lat?: unknown }).lat)) &&
+            Number.isFinite(Number((row as { lon?: unknown }).lon)),
+        );
+
+      // Live WS result may arrive after the local timeout spoke a synthetic
+      // summary — still refresh the map / result card without re-speaking.
+      if (source === "ws" && (spokenRequestRef.current === requestId || !pendingResultRef.current)) {
+        if (hasCoords || (Array.isArray(result.results) && result.results.length > 0)) {
+          lastResultRef.current = result;
+          setLastResult(result);
+          setStatus("COMPLETE");
+          pushLog(
+            "tool",
+            `MAP refresh · ${result.source ?? "backend"} · ${result.count ?? result.results?.length ?? 0} places`,
+          );
+        }
+        return;
+      }
+
       if (!pendingResultRef.current) return;
       if (spokenRequestRef.current === requestId) return;
 
@@ -506,6 +543,7 @@ export function VoiceAgent() {
         `COMPLETE ${result.tool ?? taskRef.current?.type ?? "tool"} · ${source} result → Rime`,
       );
       lastResultRef.current = result;
+      setLastResult(result);
       if (typeof result.delay_seconds === "number") {
         setLatency((prev) => ({ ...prev, toolDelaySec: result.delay_seconds ?? null }));
       }
@@ -529,6 +567,8 @@ export function VoiceAgent() {
       pendingResultRef.current = true;
       taskRef.current = next;
       spokenRequestRef.current = null;
+      lastResultRef.current = null;
+      setLastResult(null);
       setTask(next);
       setStatus("RUNNING");
       setRequestId(next.tool_call_id);
@@ -547,7 +587,8 @@ export function VoiceAgent() {
       addAssistant(ack);
       // Searching pulse starts after ack TTS (see speak onDone) — honest gap
 
-      // Fallback if WebSocket / backend result never arrives
+      // Fallback only if backend never answers — don't invent mock place names.
+      const fallbackMs = wsConnected ? 16000 : 4200;
       const fallbackId = window.setTimeout(() => {
         if (nextTurn !== currentTurn.current) return;
         if (!pendingResultRef.current) return;
@@ -558,16 +599,19 @@ export function VoiceAgent() {
           tool: next.type === "restaurant" ? "search_restaurants" : "search_hotels",
           summary:
             next.type === "hotel"
-              ? resultHotels(city, budget, replyLangRef.current)
-              : resultRestaurants(p.match(/area=([^ ·]+)/)?.[1] || city, replyLangRef.current),
+              ? `Still waiting on live hotel results for ${city}…`
+              : `Still waiting on live restaurant results for ${city}…`,
           params: { city, budget: Number(budget) },
           reply_lang: replyLangRef.current,
+          source: "fallback",
+          count: 0,
+          results: [],
         };
         completeFromBackend(next.tool_call_id, synthetic, "fallback");
-      }, 4200);
+      }, fallbackMs);
       timers.current.push(fallbackId);
     },
-    [addAssistant, clearLocalTimers, completeFromBackend, pushLog, setPipeline],
+    [addAssistant, clearLocalTimers, completeFromBackend, pushLog, setPipeline, wsConnected],
   );
 
   const cancelLocal = useCallback(() => {
@@ -577,6 +621,8 @@ export function VoiceAgent() {
     setStatus("CANCELLED");
     setTask(null);
     taskRef.current = null;
+    lastResultRef.current = null;
+    setLastResult(null);
     fenceLocalTool();
     pushLog("interrupt", "CANCEL · in-flight search fenced");
     addAssistant(ackCancel(replyLangRef.current));
@@ -972,6 +1018,11 @@ export function VoiceAgent() {
     };
   }, [clearLocalTimers, setPipeline]);
 
+  const showMapPanel =
+    status === "RUNNING" || status === "COMPLETE" || Boolean(lastResult);
+  const searchCity =
+    task?.params.match(/city=([^ ·]+)/)?.[1] || preferredCity || "Delhi";
+
   return (
     <main
       className="relative mx-auto min-h-screen max-w-[1440px] px-4 pb-20 sm:px-8 lg:px-12"
@@ -1029,8 +1080,29 @@ export function VoiceAgent() {
         </motion.div>
       </section>
 
-      <section className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="glass-card p-5 sm:p-7">
+      <section
+        className={`relative z-10 grid gap-6 transition-all duration-500 ${
+          showMapPanel
+            ? "lg:grid-cols-[minmax(17rem,1.1fr)_minmax(0,0.9fr)_20rem]"
+            : "lg:grid-cols-[minmax(0,1fr)_22rem]"
+        }`}
+      >
+        <AnimatePresence initial={false}>
+          {showMapPanel ? (
+            <PlacesPanel
+              key="places-panel"
+              result={lastResult}
+              searching={status === "RUNNING"}
+              city={searchCity}
+            />
+          ) : null}
+        </AnimatePresence>
+
+        <motion.div
+          layout
+          transition={{ type: "spring", stiffness: 280, damping: 28 }}
+          className={`glass-card p-5 sm:p-7 ${showMapPanel ? "lg:max-w-none" : ""}`}
+        >
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 text-sm font-semibold">
@@ -1408,7 +1480,7 @@ export function VoiceAgent() {
               </motion.button>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         <div className="flex flex-col gap-4">
           <DebugPanel state={wsState} connected={wsConnected} latency={latency} />
