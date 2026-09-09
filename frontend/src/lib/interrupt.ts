@@ -19,7 +19,7 @@ const RESTAURANT_RE =
   /restaurants?|resturants?|restraunts?|food|eat|dinner|cafe|cuisine|thali|lunch|breakfast|khana|khaana/;
 const HOTEL_RE = /\bhotels?\b|\bhotal\b|\bstay\b|\broom\b|\brooms?\b|lodging|accommodation|resort/;
 const REFINE_RE =
-  /actually|only|vegetarian|veg|under|metro|near|rupees|₹|cuisine|area|same\s+(but|search)|shakahari|sirf\s+veg/;
+  /actually|only|vegetarian|\bveg\b|under|metro|near|rupees|₹|cuisine|area|same\s+(but|search)|shakahari|sirf\s+veg|\b(delhi|mumbai|bangalore|bengaluru|jaipur|hyderabad|chennai|pune|kolkata|goa)\b/;
 
 /** Mirror of backend `_classify_interrupt` (same keyword families). */
 export function classifyInterrupt(text: string, task: ClassifyTask): InterruptKind | null {
@@ -34,6 +34,7 @@ export function classifyInterrupt(text: string, task: ClassifyTask): InterruptKi
   ) {
     return "PIVOT";
   }
+  // REFINE when we have an active/last task (searching or after results)
   if (task && REFINE_RE.test(s)) return "REFINE";
   return null;
 }

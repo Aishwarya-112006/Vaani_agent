@@ -3,10 +3,11 @@
 Interruptible **India-first** voice booking agent (hotels + restaurants).  
 Built for the Rime Track: users can change their mind mid-search without stale answers being spoken.
 
-> **Honest demo note:** hotel/restaurant results default to **mock inventory** (names/prices) so
-> interrupts stay demoable. Set `GEOAPIFY_API_KEY` + `USE_LIVE_PLACES=1` for live OpenStreetMap
-> places + map pins (budget is not hard-filtered on live data). Always falls back to mock on API miss.
-> What is live either way: interrupt classification, turn fencing, Groq STT, Rime TTS, Wikipedia FACT, IP city greeting.
+> **Honest demo note:** hotel/restaurant results default to **mock inventory** so interrupts stay
+> demoable (~4–5s cancelable delay). Set `GEOAPIFY_API_KEY` + `USE_LIVE_PLACES=1` for live
+> OpenStreetMap places + map pins. **While live is on there is no mock fallback** (empty/error
+> is honest). Always live either way: interrupt classification, turn fencing, Groq STT, Rime TTS,
+> Wikipedia FACT, IP city greeting.
 
 ---
 
@@ -20,9 +21,10 @@ Built for the Rime Track: users can change their mind mid-search without stale a
 | **STATUS** | Answer progress while search keeps running |
 | **PIVOT** | Switch hotel ↔ restaurant; invalidate old result |
 | **FACT** | Wikipedia aside — does **not** cancel search |
-| **Stale fence** | Old `turn_id` results never reach Rime |
-| **City greeting** | IPInfo (optional) → Yes / Change city |
-| **Judge UX** | Live DebugPanel, one-click demos, follow-up chips |
+| **Stale fence** | Old `turn_id` + `active_request_id` results never reach Rime |
+| **City greeting** | IPInfo (optional) → Yes / Change city (known cities only) |
+| **Live map** | Left **PlacesPanel** (Leaflet) while RUNNING / COMPLETE |
+| **Judge UX** | DebugPanel + WS, always-on interrupt chips, one-click demos |
 
 ---
 
@@ -38,24 +40,29 @@ copy .env.example .env        # Windows; or: cp .env.example .env
 pnpm dev
 ```
 
+**One process only** on the API port. Leftover uvicorn / ghost listeners cause stale mock,
+CORS failures, or hung `/session`. If `:8000` is wedged on Windows: Admin
+`net stop winnat` → `net start winnat`, or run `PORT=8002` and point the FE at it.
+
 ### 2. Frontend (`:8080`)
 
 ```bash
 cd frontend
 pnpm install
-# optional: set VITE_API_URL=http://localhost:8000
+# Match the backend port (required if not :8000):
+#   echo VITE_API_URL=http://localhost:8000 > .env.local
 pnpm dev
 ```
 
-Open **http://localhost:8080**
+Open **http://localhost:8080** (if 8080 is busy Vite bumps to 8081/8082 — add that origin to `CORS_ORIGINS`).
 
 | Route | Purpose |
 |-------|---------|
-| `/` | Voice lab (main demo) |
+| `/` | Voice lab (main demo — viewport-fit conversation card) |
 | `/demo` | 60s judge script + API key checklist |
 | `/evaluate` | Metrics harness + QA-independent pytest log |
 
-Full walkthrough: **[DEMO.md](./DEMO.md)** · Evidence claims: **[RIME_EVIDENCE.md](./RIME_EVIDENCE.md)** · Backlog: **[ENHANCEMENTS.md](./ENHANCEMENTS.md)**
+Full walkthrough: **[DEMO.md](./DEMO.md)** · Evidence: **[RIME_EVIDENCE.md](./RIME_EVIDENCE.md)** · Backlog: **[ENHANCEMENTS.md](./ENHANCEMENTS.md)**
 
 ---
 
@@ -70,16 +77,17 @@ Copy `backend/.env.example` → `backend/.env`:
 | `GROQ_STT_LANGUAGE` | No (`auto`) | EN/HI detection |
 | `RIME_SPEAKER` / `RIME_MODEL_ID` | No | English voice (default Luna / Arcana) |
 | `RIME_SPEAKER_HI` / `RIME_MODEL_ID_HI` | No | Hindi voice (`nadi` / `coda`) |
-| `IPINFO_TOKEN` | No | City greeting (fallback: detected/local) |
-| `GEOAPIFY_API_KEY` | No | Live places geocode + search ([free key](https://myprojects.geoapify.com/)) |
-| `USE_LIVE_PLACES` | No (`0`) | Set `1` to use Geoapify; keep `0` for mock/eval |
-| `CORS_ORIGINS` | Prod | Comma-separated frontend origins |
+| `IPINFO_TOKEN` | No | City greeting (fallback: Delhi / local) |
+| `GEOAPIFY_API_KEY` | No | Live places + geocode for map pins |
+| `USE_LIVE_PLACES` | No (`0`) | `1` = Geoapify only (no mock fallback); `0` = mock/eval |
+| `CORS_ORIGINS` | Local/Prod | Include `http://localhost:8080` … `:8082` for Vite bumps |
+| `PORT` | No (`8000`) | Override if `:8000` is ghost-bound |
 
-Frontend optional: `VITE_API_URL` (default `http://localhost:8000`).
+Frontend: `VITE_API_URL` (default `http://localhost:8000`) — **must match** the running backend or session/WS fail.
 
-**Live places + map:** set `GEOAPIFY_API_KEY` and `USE_LIVE_PLACES=1`, restart **one** backend (`pnpm dev` in `/backend`). After a search completes on `/`, a **Map** card appears above the mic. Only one process should listen on `:8000` — leftover uvicorn reloaders will serve stale mock results.
+**Live places + map:** `GEOAPIFY_API_KEY` + `USE_LIVE_PLACES=1`, restart **one** backend. On `/`, a **Live map** panel opens on the left during search/results. Mock mode still geocodes pins when a Geoapify key is present.
 
-**If mic STT returns 403** (“Access denied / network settings”): Groq is blocking the key or network — use **typed text** for the demo; TTS can still work.
+**If mic STT returns 403:** use **typed text**; Rime TTS can still work.
 
 ---
 
@@ -87,10 +95,10 @@ Frontend optional: `VITE_API_URL` (default `http://localhost:8000`).
 
 1. Confirm city (**Yes** or **Change city**).
 2. Type or say: `Find hotels in Delhi under ₹5000`.
-3. While searching: `Actually, only vegetarian and near a metro` → **REFINE**.
-4. Or tap **Demo · REFINE / STATUS / FACT / PIVOT**.
+3. While searching (~1–2s in, window is ~4–5s): tap **REFINE** / **STATUS** / **FACT** / **PIVOT** / **CANCEL** (always visible in the Live conversation card) or type `Actually, only vegetarian and near a metro`.
+4. Or tap **Demo · REFINE / STATUS / FACT / PIVOT** below.
 5. After COMPLETE: **Cheaper?** · **Metro?** · **Veg?** · **Restaurants?** · **Book first?** · **Same · Mumbai**.
-6. Show DebugPanel: `turn_id` · `tool_status` · `interrupt_type` · `stale_discarded` · latency badges.
+6. Show DebugPanel: `turn_id` · `tool_status` · `interrupt_type` · `stale_discarded` · `places_source` · latency badges.
 
 ### Interrupt cheat sheet
 
@@ -111,10 +119,10 @@ Frontend optional: `VITE_API_URL` (default `http://localhost:8000`).
 | API | FastAPI · WebSocket state · CORS |
 | STT | Groq Whisper (`whisper-large-v3`, `auto` language) |
 | TTS | Rime (`POST /tts`) — Rime-only playback (no browser voice bridge) |
-| Tools | `search_hotels` / `search_restaurants` — mock by default (~2.0–2.8s, cancelable); optional live Geoapify/OSM when `USE_LIVE_PLACES=1` |
+| Tools | `search_hotels` / `search_restaurants` — mock by default (~4–5s, cancelable); optional live Geoapify/OSM |
 | Aside | Wikipedia FACT |
-| Geo | IPInfo → session city; Geoapify geocode + Places (optional); results map (Leaflet / OSM tiles) |
-| UI | TanStack Start / Vite · Framer Motion · Web Audio |
+| Geo | IPInfo → session city; Geoapify geocode + Places (optional) |
+| UI | TanStack Start / Vite · Framer Motion · Leaflet map · Web Audio |
 
 ---
 
@@ -127,10 +135,10 @@ Vaani_agent/
 │   ├── agent/         # STT, Rime, state, interrupts
 │   └── tools/         # hotels, restaurants, real_places, wikipedia, ipinfo
 ├── frontend/          # Voice lab UI (:8080)
+│   ├── scripts/chromium-smoke.mjs
 │   └── src/components/vaani/
-├── tests/             # pytest vs live ASGI app
+├── tests/             # pytest vs live ASGI app (mock places locked)
 ├── evaluation/        # scenarios + metrics JSON
-├── scripts/           # UI DOM walkthrough (Playwright)
 ├── DEMO.md
 ├── RIME_EVIDENCE.md
 └── ENHANCEMENTS.md
@@ -143,11 +151,11 @@ Vaani_agent/
 ### Backend (pytest)
 
 ```bash
-# from repo root
+# from repo root — forces USE_LIVE_PLACES=0 via tests/conftest.py
 backend/.venv/Scripts/python -m pytest tests/ -q
 ```
 
-Full suite including FACT. Writes `evaluation/qa_independent_results.json`.
+Includes FACT + deep mock edges (`tests/test_push_edge_deep.py`). Writes `evaluation/qa_independent_results.json`.
 
 ### Metrics harness
 
@@ -155,19 +163,20 @@ Full suite including FACT. Writes `evaluation/qa_independent_results.json`.
 backend/.venv/Scripts/python evaluation/compute_metrics.py
 ```
 
-Updates `evaluation/results.json` (and frontend public copy when configured). View at `/evaluate`.
+Updates `evaluation/results.json`. View at `/evaluate`.
 
-### UI DOM walkthrough (Playwright)
+### Chromium smoke (Playwright)
 
-With FE + BE running:
+With FE + BE running and `VITE_API_URL` matched:
 
 ```bash
 cd frontend
 pnpm exec playwright install chromium   # once
-node ../scripts/ui-dom-walkthrough.mjs
+# optional: set VAANI_UI_URL=http://localhost:8080
+node scripts/chromium-smoke.mjs
 ```
 
-Clicks nav, city UX, typed refine/pivot, chips, demos; report → `scripts/ui-walkthrough-report.json`.
+Checks session, interrupt chips, typed search, STATUS mid-flight, map panel, no `city=Actually` pollution.
 
 ---
 
@@ -179,7 +188,7 @@ Clicks nav, city UX, typed refine/pivot, chips, demos; report → `scripts/ui-wa
 | `POST` | `/session/{id}/city` | Confirm preferred city |
 | `POST` | `/message` | Text and/or audio; interrupts |
 | `POST` | `/tts` | Rime audio bytes |
-| `GET` | `/status` | Tool / fence state |
+| `GET` | `/status` | Tool / fence state (WS carries richer `last_tool_result`) |
 | `WS` | `/ws/{session_id}` | Live DebugPanel |
 
 ---
@@ -188,10 +197,12 @@ Clicks nav, city UX, typed refine/pivot, chips, demos; report → `scripts/ui-wa
 
 | Symptom | Fix |
 |---------|-----|
-| Mic STT 403 from Groq | Network/key issue — use typed input; refresh API key |
-| No speech | Check `RIME_API_KEY`; unlock audio with a click first |
-| CORS errors | Set `CORS_ORIGINS` to your frontend URL |
-| Session pending | Backend not on `:8000` — run `pnpm dev` in `backend/` |
+| Mic STT 403 from Groq | Use typed input; refresh API key |
+| No speech / TTS Failed to fetch | Check `RIME_API_KEY`; click page once to unlock audio |
+| CORS / session pending | `CORS_ORIGINS` must include the exact Vite origin (`:8080`–`:8082`); `VITE_API_URL` must match BE |
+| Judge panel “Waiting for WebSocket” | FE pointing at wrong/dead port — one clean BE + restart Vite |
+| Empty / hung map | Wait for COMPLETE; enable Geoapify for pins; live mode has no mock fallback |
+| Stale mock after env change | Kill extra uvicorn on `:8000` / `:8001`; restart one BE |
 | Empty eval page | Run pytest / `compute_metrics.py`, refresh `/evaluate` |
 
 ---

@@ -44,13 +44,13 @@ export function Transcript({
       aria-live="polite"
       aria-label="Conversation transcript"
       className={cn(
-        "flex max-h-[420px] min-h-[300px] flex-col gap-3 overflow-y-auto pr-1 scroll-smooth",
+        "flex max-h-[420px] min-h-[220px] flex-col gap-3 overflow-y-auto pr-1 scroll-smooth",
         className,
       )}
     >
-      {turns.length === 0 && (
-        <div className="m-auto py-8 text-center">
-          <Sparkles className="mx-auto mb-3 size-7 animate-pulse text-brand-violet" />
+          {turns.length === 0 && (
+        <div className="m-auto py-4 text-center">
+          <Sparkles className="mx-auto mb-2 size-5 animate-pulse text-brand-violet" />
           <p className="text-sm font-medium text-foreground">{emptyTitle}</p>
           <p className="mt-1 text-xs text-muted-foreground">{emptySubtitle}</p>
         </div>
@@ -68,13 +68,13 @@ export function Transcript({
               exit={{ opacity: 0, scale: 0.97 }}
               transition={{ type: "spring", stiffness: 320, damping: 28 }}
               className={cn(
-                "max-w-[88%] rounded-2xl border p-4 shadow-sm transition-colors",
+                "max-w-[88%] rounded-xl border p-3 shadow-sm transition-colors",
                 isUser
                   ? "ml-auto border-primary/30 bg-primary/10 text-foreground"
                   : "border-border bg-card/70 text-foreground backdrop-blur-sm",
               )}
             >
-              <div className="mb-1.5 flex items-center justify-between gap-5 text-xs text-muted-foreground">
+              <div className="mb-1 flex items-center justify-between gap-5 text-[11px] text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5 font-medium">
                   {isUser ? (
                     <>
@@ -88,9 +88,9 @@ export function Transcript({
                     </>
                   )}
                 </span>
-                <span className="font-mono text-[11px] opacity-75">{turn.time}</span>
+                <span className="font-mono text-[10px] opacity-75">{turn.time}</span>
               </div>
-              <p className="whitespace-pre-wrap break-words text-sm leading-6">{turn.text}</p>
+              <p className="whitespace-pre-wrap break-words text-sm leading-5">{turn.text}</p>
             </motion.div>
           );
         })}

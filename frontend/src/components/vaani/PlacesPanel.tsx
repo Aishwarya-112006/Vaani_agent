@@ -12,7 +12,7 @@ type PlacesPanelProps = {
 function PlaceRows({ markers }: { markers: MapMarker[] }) {
   if (!markers.length) return null;
   return (
-    <ul className="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1">
+    <ul className="mt-2 max-h-36 space-y-1.5 overflow-y-auto pr-1">
       {markers.map((m, i) => (
         <li
           key={`${m.name}-${m.lat}-${m.lon}`}
@@ -47,7 +47,7 @@ export function PlacesPanel({ result, searching, city }: PlacesPanelProps) {
       animate={{ opacity: 1, x: 0, width: "auto" }}
       exit={{ opacity: 0, x: -24 }}
       transition={{ type: "spring", stiffness: 320, damping: 28 }}
-      className="glass-card flex min-h-[28rem] flex-col overflow-hidden p-4 sm:p-5 lg:min-h-[32rem]"
+      className="glass-card flex h-fit max-h-full flex-col self-start overflow-hidden p-3 sm:p-4 lg:max-h-full lg:overflow-y-auto"
     >
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
@@ -77,7 +77,7 @@ export function PlacesPanel({ result, searching, city }: PlacesPanelProps) {
         <p className="mb-2 text-[11px] leading-relaxed text-muted-foreground">{result.budget_note}</p>
       ) : null}
 
-      <div className="min-h-0 flex-1">
+      <div>
         <AnimatePresence mode="wait">
           {markers.length ? (
             <motion.div
@@ -85,7 +85,6 @@ export function PlacesPanel({ result, searching, city }: PlacesPanelProps) {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="h-full"
             >
               <ResultsMap markers={markers} source={source} variant="panel" />
             </motion.div>
@@ -95,7 +94,7 @@ export function PlacesPanel({ result, searching, city }: PlacesPanelProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 text-center sm:h-72"
+              className="flex h-40 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 text-center sm:h-44"
             >
               <div className="mb-3 size-10 animate-pulse rounded-full border-2 border-brand-cyan/40 border-t-brand-cyan" />
               <p className="text-sm font-medium text-foreground">

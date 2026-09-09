@@ -350,7 +350,7 @@ export function PushToTalk({
     <div className="flex flex-col items-center">
       <div className="relative grid place-items-center">
         {recording && (
-          <span className="pulse-ring absolute size-28 rounded-full bg-destructive/30" />
+          <span className="pulse-ring absolute size-14 rounded-full bg-destructive/30 sm:size-16" />
         )}
         <motion.button
           type="button"
@@ -369,22 +369,22 @@ export function PushToTalk({
             ease: "easeInOut",
           }}
           whileTap={{ scale: 0.94 }}
-          className={`relative grid size-28 place-items-center rounded-full border-8 text-sm font-semibold text-primary-foreground select-none touch-none ${
+          className={`relative grid size-14 place-items-center rounded-full border-4 text-sm font-semibold text-primary-foreground select-none touch-none sm:size-16 ${
             recording
-              ? "border-destructive/30 bg-destructive shadow-[0_0_70px_oklch(0.65_0.22_12/0.55)]"
-              : "border-primary/20 bg-gradient-to-br from-primary to-accent shadow-[0_0_70px_oklch(0.53_0.24_294/0.45)]"
+              ? "border-destructive/30 bg-destructive shadow-[0_0_40px_oklch(0.65_0.22_12/0.55)]"
+              : "border-primary/20 bg-gradient-to-br from-primary to-accent shadow-[0_0_40px_oklch(0.53_0.24_294/0.45)]"
           } disabled:opacity-50`}
         >
           {recording ? (
-            <Square className="size-6 fill-current" />
+            <Square className="size-5 fill-current" />
           ) : arming ? (
-            <Mic className="size-6 animate-pulse" />
+            <Mic className="size-5 animate-pulse" />
           ) : (
-            <WandSparkles className="size-6" />
+            <WandSparkles className="size-5" />
           )}
         </motion.button>
       </div>
-      <p className="mt-4 max-w-xs text-center text-xs text-muted-foreground">{hint}</p>
+      <p className="mt-1.5 max-w-xs text-center text-[10px] text-muted-foreground">{hint}</p>
     </div>
   );
 }

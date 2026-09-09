@@ -92,7 +92,8 @@ async def test_t23_stale_fence_direct_race(client, session_id, results_recorder)
     second = await send_text(client, session_id, "Near the airport instead")
     assert second.status_code == 200, second.text
 
-    status = await wait_for_status(client, session_id, {"COMPLETE", "CANCELLED"}, timeout=12.0)
+    # Tool delay is ~4–5s; refine starts another run — allow enough poll time.
+    status = await wait_for_status(client, session_id, {"COMPLETE", "CANCELLED"}, timeout=20.0)
 
     # The one thing that must NEVER happen: the second request's
     # active_request_id gets silently overwritten by the stale first one.

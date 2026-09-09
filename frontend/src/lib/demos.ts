@@ -24,7 +24,7 @@ export const JUDGE_DEMOS: JudgeDemo[] = [
     description: "Start hotels, then tighten filters mid-flight.",
     steps: [
       { delayMs: 0, utterance: "Find hotels in Delhi under ₹5000", expect: "SEARCH" },
-      { delayMs: 900, utterance: "Actually, only vegetarian and near a metro", expect: "REFINE" },
+      { delayMs: 2200, utterance: "Actually, only vegetarian and near a metro", expect: "REFINE" },
     ],
   },
   {
@@ -33,7 +33,7 @@ export const JUDGE_DEMOS: JudgeDemo[] = [
     description: "Ask progress while search keeps running.",
     steps: [
       { delayMs: 0, utterance: "Find hotels in Delhi under ₹5000", expect: "SEARCH" },
-      { delayMs: 700, utterance: "What are you searching for?", expect: "STATUS" },
+      { delayMs: 2000, utterance: "What are you searching for?", expect: "STATUS" },
     ],
   },
   {
@@ -42,7 +42,7 @@ export const JUDGE_DEMOS: JudgeDemo[] = [
     description: "Wikipedia aside without cancelling the tool.",
     steps: [
       { delayMs: 0, utterance: "Find restaurants in Connaught Place", expect: "SEARCH" },
-      { delayMs: 700, utterance: "What is Connaught Place?", expect: "FACT" },
+      { delayMs: 2000, utterance: "What is Connaught Place?", expect: "FACT" },
     ],
   },
   {
@@ -51,7 +51,7 @@ export const JUDGE_DEMOS: JudgeDemo[] = [
     description: "Switch domain and fence the previous search.",
     steps: [
       { delayMs: 0, utterance: "Find hotels in Delhi under ₹5000", expect: "SEARCH" },
-      { delayMs: 900, utterance: "Find restaurants there instead", expect: "PIVOT" },
+      { delayMs: 2200, utterance: "Find restaurants there instead", expect: "PIVOT" },
     ],
   },
 ];

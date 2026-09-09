@@ -120,7 +120,7 @@ export function ResultsMap({ markers, source, className, variant = "inline" }: R
         : null;
 
   const mapHeight =
-    variant === "panel" ? "h-64 w-full sm:h-72 lg:h-[22rem]" : "h-56 w-full sm:h-64";
+    variant === "panel" ? "h-44 w-full sm:h-48" : "h-56 w-full sm:h-64";
 
   return (
     <div className={className}>

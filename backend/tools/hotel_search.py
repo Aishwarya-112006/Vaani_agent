@@ -27,9 +27,9 @@ from tools.real_places import (
 
 logger = logging.getLogger(__name__)
 
-# Artificial latency window (seconds) — short enough for demo UX, still interruptible
-MIN_DELAY = 2.0
-MAX_DELAY = 2.8
+# Artificial latency window (seconds) — long enough to demo interrupts mid-search
+MIN_DELAY = 4.0
+MAX_DELAY = 5.0
 
 
 def parse_hotel_params(
@@ -297,7 +297,7 @@ async def search_hotels(
     if live_places_enabled():
         try:
             # Cancelable pause so REFINE/CANCEL still have a demo window under live.
-            live_wait = delay if delay is not None else random.uniform(1.6, 2.2)
+            live_wait = delay if delay is not None else random.uniform(MIN_DELAY, MAX_DELAY)
             await asyncio.sleep(live_wait)
             places = await live_hotels(city_name, near_metro=near_metro, limit=15)
             if places:
