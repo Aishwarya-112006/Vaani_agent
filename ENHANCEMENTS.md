@@ -3,6 +3,14 @@
 Living backlog for product upgrades, API integrations, UX polish, optimization, and tech debt.  
 Use this as the single checklist before demo day — and to **split GitHub issues by owner**.
 
+## Live Deployment
+
+| Service | Platform | URL |
+|---------|----------|-----|
+| Frontend | Vercel | [https://vaani-agent.vercel.app](https://vaani-agent.vercel.app) |
+| Backend | Render | [https://vaani-agent-backend.onrender.com](https://vaani-agent-backend.onrender.com) |
+| API Docs | Render | [https://vaani-agent-backend.onrender.com/docs](https://vaani-agent-backend.onrender.com/docs) |
+
 ---
 
 ## Priority legend
@@ -220,7 +228,9 @@ Use this as the single checklist before demo day — and to **split GitHub issue
 
 | Item | Pri | Owner |
 |------|-----|-------|
-| Verify `CORS_ORIGINS` on deploy | P1 | Backend |
+| Verify `CORS_ORIGINS` on deploy | DONE | Backend |
+| Deploy backend (Render) | DONE | Backend |
+| Deploy frontend (Vercel) | DONE | Frontend |
 | Session retry + error UI | DONE | Frontend (+ BE) |
 | `/evaluate` → harness docs | P2 | Backend + Docs |
 | Docker / compose `.env` + ports | P2 | Backend + Docs |
@@ -347,7 +357,8 @@ UI / Rime playback
 - C1 / H2: shared `lib/interrupt.ts` ↔ BE `_classify_interrupt`
 - C2: audio path prefers BE `interrupt_type` (already wired)
 - B9: DebugPanel `tool_delay` + `ack→complete` badges
-- D1: CORS logged at boot + `.env.example` deploy note
+- D1: CORS logged at boot + `.env.example` deploy note — **deployed live**
+- Deployment: Backend on Render (`https://vaani-agent-backend.onrender.com`) + Frontend on Vercel (`https://vaani-agent.vercel.app`)
 - E2: conftest documents no client-fed `interrupt_type` for scored suite
 
 ---
@@ -362,6 +373,7 @@ UI / Rime playback
 | Voice | One Rime voice, click mic | Done (Frontend) |
 | Polish | Chips B1 + demos B6 + `/demo` | Done |
 | Evidence | `/evaluate` harness + QA tab | Done |
+| **Deployed** | **Live on Render + Vercel** | **Done** |
 
 ---
 

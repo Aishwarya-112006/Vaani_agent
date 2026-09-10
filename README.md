@@ -3,8 +3,18 @@
 Interruptible **India-first** voice booking agent (hotels + restaurants).  
 Built for the Rime Track: users can change their mind mid-search without stale answers being spoken.
 
+## Live Deployment
+
+| Service | URL |
+|---------|-----|
+| **Frontend** | [https://vaani-agent.vercel.app](https://vaani-agent.vercel.app) |
+| **Backend API** | [https://vaani-agent-backend.onrender.com](https://vaani-agent-backend.onrender.com) |
+| **API Docs** | [https://vaani-agent-backend.onrender.com/docs](https://vaani-agent-backend.onrender.com/docs) |
+
+> **Note:** The backend runs on Render free tier and may take **30-50 seconds** to wake up on first request (cold start). Subsequent requests are fast.
+
 > **Honest demo note:** hotel/restaurant results default to **mock inventory** so interrupts stay
-> demoable (~4–5s cancelable delay). Set `GEOAPIFY_API_KEY` + `USE_LIVE_PLACES=1` for live
+> demoable (~4-5s cancelable delay). Set `GEOAPIFY_API_KEY` + `USE_LIVE_PLACES=1` for live
 > OpenStreetMap places + map pins. **While live is on there is no mock fallback** (empty/error
 > is honest). Always live either way: interrupt classification, turn fencing, Groq STT, Rime TTS,
 > Wikipedia FACT, IP city greeting.
@@ -30,7 +40,13 @@ Built for the Rime Track: users can change their mind mid-search without stale a
 
 ## Quick start
 
-### 1. Backend (`:8000`)
+### Option A: Use the live deployment
+
+Visit **[https://vaani-agent.vercel.app](https://vaani-agent.vercel.app)** — no setup needed.
+
+### Option B: Run locally
+
+#### 1. Backend (`:8000`)
 
 ```bash
 cd backend
@@ -44,7 +60,7 @@ pnpm dev
 CORS failures, or hung `/session`. If `:8000` is wedged on Windows: Admin
 `net stop winnat` → `net start winnat`, or run `PORT=8002` and point the FE at it.
 
-### 2. Frontend (`:8080`)
+#### 2. Frontend (`:8080`)
 
 ```bash
 cd frontend
@@ -123,6 +139,7 @@ Frontend: `VITE_API_URL` (default `http://localhost:8000`) — **must match** th
 | Aside | Wikipedia FACT |
 | Geo | IPInfo → session city; Geoapify geocode + Places (optional) |
 | UI | TanStack Start / Vite · Framer Motion · Leaflet map · Web Audio |
+| Hosting | Frontend: **Vercel** · Backend: **Render** |
 
 ---
 
@@ -130,11 +147,12 @@ Frontend: `VITE_API_URL` (default `http://localhost:8000`) — **must match** th
 
 ```
 Vaani_agent/
-├── backend/           # FastAPI app (pnpm setup / pnpm dev)
+├── backend/           # FastAPI app — deployed on Render
 │   ├── api/main.py
 │   ├── agent/         # STT, Rime, state, interrupts
-│   └── tools/         # hotels, restaurants, real_places, wikipedia, ipinfo
-├── frontend/          # Voice lab UI (:8080)
+│   ├── tools/         # hotels, restaurants, real_places, wikipedia, ipinfo
+│   └── vercel.json    # (optional Vercel config)
+├── frontend/          # Voice lab UI — deployed on Vercel
 │   ├── scripts/chromium-smoke.mjs
 │   └── src/components/vaani/
 ├── tests/             # pytest vs live ASGI app (mock places locked)
@@ -204,6 +222,29 @@ Checks session, interrupt chips, typed search, STATUS mid-flight, map panel, no 
 | Empty / hung map | Wait for COMPLETE; enable Geoapify for pins; live mode has no mock fallback |
 | Stale mock after env change | Kill extra uvicorn on `:8000` / `:8001`; restart one BE |
 | Empty eval page | Run pytest / `compute_metrics.py`, refresh `/evaluate` |
+| Backend session nahi bani (deployed) | Render free tier cold start — wait 30-50s, then retry |
+| CORS error on live site | `CORS_ORIGINS` on Render must include `https://vaani-agent.vercel.app` |
+
+---
+
+## Deployment
+
+| Component | Platform | URL |
+|-----------|----------|-----|
+| Backend | [Render](https://render.com) | `https://vaani-agent-backend.onrender.com` |
+| Frontend | [Vercel](https://vercel.com) | `https://vaani-agent.vercel.app` |
+
+### Backend (Render)
+- **Root Directory:** `backend`
+- **Build Command:** `pip install -r requirements.txt`
+- **Start Command:** `uvicorn api.main:app --host 0.0.0.0 --port $PORT`
+- **Environment Variables:** All keys from `backend/.env.example` + `CORS_ORIGINS=https://vaani-agent.vercel.app`
+
+### Frontend (Vercel)
+- **Root Directory:** `frontend`
+- **Build Command:** `npm run build`
+- **Output Directory:** `.output/public`
+- **Environment Variables:** `VITE_API_URL=https://vaani-agent-backend.onrender.com`
 
 ---
 
