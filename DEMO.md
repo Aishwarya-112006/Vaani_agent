@@ -1,5 +1,15 @@
 # DEMO.md — 60-second judge script
 
+## Live Demo
+
+**Frontend:** [https://vaani-agent.vercel.app](https://vaani-agent.vercel.app)  
+**Backend API:** [https://vaani-agent-backend.onrender.com](https://vaani-agent-backend.onrender.com)  
+**API Docs:** [https://vaani-agent-backend.onrender.com/docs](https://vaani-agent-backend.onrender.com/docs)
+
+> **Cold start:** Backend is on Render free tier. First request may take 30-50s to wake up — wait and retry.
+
+---
+
 ## Before you start (API keys)
 
 | Key | Where | Needed for |
@@ -11,6 +21,12 @@
 | `USE_LIVE_PLACES` | optional (`0`) | Keep `0` for reliable mock demo; `1` = live OSM only |
 
 Copy `backend/.env.example` → `backend/.env`.
+
+### Option A: Use the live deployment
+
+Just open **[https://vaani-agent.vercel.app](https://vaani-agent.vercel.app)** — no local setup needed.
+
+### Option B: Run locally
 
 ```bash
 # Terminal 1 — one backend only
@@ -59,12 +75,24 @@ Open **http://localhost:8080**. If Vite lands on `:8081`/`:8082`, those origins 
 
 ## Ops checklist (demo day)
 
+### Deployed version
+
+| Check | OK when |
+|-------|---------|
+| Backend alive | [/docs](https://vaani-agent-backend.onrender.com/docs) loads (wait for cold start) |
+| Frontend alive | [vaani-agent.vercel.app](https://vaani-agent.vercel.app) loads |
+| CORS | `CORS_ORIGINS` on Render includes `https://vaani-agent.vercel.app` |
+| Session creates | Network tab `POST .../session` returns 200 |
+| Interrupt window | Search stays RUNNING several seconds (~4-5s) |
+
+### Local version
+
 | Check | OK when |
 |-------|---------|
 | One BE process | Docs at `http://127.0.0.1:PORT/docs` |
 | FE → same PORT | Network tab `POST …/session` hits that host |
-| WebSocket | Judge panel **not** “Waiting for WebSocket…” |
-| Interrupt window | Search stays RUNNING several seconds (~4–5s) |
+| WebSocket | Judge panel **not** "Waiting for WebSocket…" |
+| Interrupt window | Search stays RUNNING several seconds (~4-5s) |
 
 Ghost `:8000` on Windows → Admin `net stop winnat` / `net start winnat`, or `PORT=8002` + matching `VITE_API_URL`.
 
