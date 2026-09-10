@@ -14,14 +14,24 @@ from fastapi.responses import JSONResponse, Response
 from groq import RateLimitError
 from pydantic import BaseModel, Field
 
-from .models import (
-    SessionResponse,
-    SessionCityRequest,
-    SessionCityResponse,
-    MessageResponse,
-    StatusResponse,
-    EvaluateResponse,
-)
+try:
+    from .models import (
+        SessionResponse,
+        SessionCityRequest,
+        SessionCityResponse,
+        MessageResponse,
+        StatusResponse,
+        EvaluateResponse,
+    )
+except ImportError:
+    from api.models import (  # type: ignore[no-redef]  # Vercel absolute import
+        SessionResponse,
+        SessionCityRequest,
+        SessionCityResponse,
+        MessageResponse,
+        StatusResponse,
+        EvaluateResponse,
+    )
 from agent.state import create_session, get_session, ConversationState
 from agent.stt import groq_transcribe
 from agent.rime import rime_speak
